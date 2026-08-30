@@ -1850,7 +1850,7 @@ namespace LwfEconomyGraph
                 bool useHolding = isCurrent && useNorm;
                 if (useHolding)
                 {
-                    DrawHoldingColumn(cx, bw, baseline, fullHeight, d, all, p);
+                    DrawHoldingColumn(cx, bw, baseline, fullHeight, iconFit, d, all, p);
                     continue;
                 }
 
@@ -1960,7 +1960,12 @@ namespace LwfEconomyGraph
             float hx = plot.x + period * cw;
             p.Fill(new Rect(hx, plot.y, cw, plot.height), new Color(1f, 1f, 1f, 0.10f));
 
-            DrawHoverBox(plot, d, period, sum, iconSize, p);
+            // 進行中の列は「ノルマの何%を持っているか」で見せる。
+            // 列の中での割合にすると、366% 持っていても合計 100% に見えてしまい、
+            // 見出しの % と食い違う
+            long denom = (_hoverHeld && d.RequiredCount > 0) ? d.RequiredCount : sum;
+
+            DrawHoverBox(plot, d, period, sum, denom, iconSize, p);
         }
 
         private int CompareHover(SourceSeries a, SourceSeries b)
@@ -1975,7 +1980,8 @@ namespace LwfEconomyGraph
             return Value(src, _hoverPeriod, _hoverByRepaid);
         }
 
-        private void DrawHoverBox(Rect plot, ChartData d, int period, long sum, float iconSize, IChartPainter p)
+        private void DrawHoverBox(Rect plot, ChartData d, int period, long sum, long denom,
+            float iconSize, IChartPainter p)
         {
             int rows = Mathf.Min(_hover.Count, HoverRows);
             float line = Mathf.Max(iconSize, p.LineHeight) + 2f;
@@ -1989,7 +1995,7 @@ namespace LwfEconomyGraph
             {
                 long v = HoverValue(_hover[i]);
                 valueWidth = Mathf.Max(valueWidth, p.Measure(N(v)));
-                percentWidth = Mathf.Max(percentWidth, p.Measure(Percent(v, sum)));
+                percentWidth = Mathf.Max(percentWidth, p.Measure(Percent(v, denom)));
                 if (!_hover[i].HasSource)
                 {
                     nameWidth = Mathf.Max(nameWidth, p.Measure(p.ReasonLabel(_hover[i].Reason)) + 8f);
@@ -2006,7 +2012,10 @@ namespace LwfEconomyGraph
                 ? (doneBefore + 1).ToString(CultureInfo.InvariantCulture) + "-" + doneAt.ToString(CultureInfo.InvariantCulture)
                 : Math.Max(1, doneAt).ToString(CultureInfo.InvariantCulture);
             string sumLabel = N(sum);
-            float headerWidth = p.Measure(periodLabel) + 6f + iconSize + 4f + p.Measure(sumLabel);
+            // 合計がノルマの何倍かは1行目に出す。各行の % を足すとこの数字になる
+            string sumPercent = (denom != sum) ? Percent(sum, denom) : null;
+            float headerWidth = p.Measure(periodLabel) + 6f + iconSize + 4f + p.Measure(sumLabel)
+                + ((sumPercent != null) ? p.Measure(sumPercent) + 6f : 0f);
 
             float width = Mathf.Max(headerWidth,
                 iconSize + 6f + nameWidth + valueWidth + 6f + percentWidth) + pad * 2f;
@@ -2036,6 +2045,11 @@ namespace LwfEconomyGraph
             p.Icon(new Rect(hx, ty, iconSize, iconSize), null, d.Selected.TagID, Ink, IconOutline);
             hx += iconSize + 4f;
             p.Text(hx, ty + textOffset, sumLabel, Ink);
+            if (sumPercent != null)
+            {
+                hx += p.Measure(sumLabel) + 6f;
+                p.Text(hx, ty + textOffset, sumPercent, Accent);
+            }
 
             ty += line;
 
@@ -2060,7 +2074,7 @@ namespace LwfEconomyGraph
                 p.Text(x + pad + iconSize + 6f + nameWidth + (valueWidth - p.Measure(value)),
                     ty + (iconSize - p.FontSize) * 0.5f, value, Ink);
 
-                string percent = Percent(v, sum);
+                string percent = Percent(v, denom);
                 p.Text(x + width - pad - p.Measure(percent), ty + (iconSize - p.FontSize) * 0.5f,
                     percent, new Color(0.75f, 0.72f, 0.68f));
 
@@ -2089,7 +2103,7 @@ namespace LwfEconomyGraph
         /// **いま持っている金を何で稼いだか**がそのまま出る。
         /// </summary>
         private void DrawHoldingColumn(float cx, float bw, float baseline, float fullHeight,
-            ChartData d, List<SourceSeries> all, IChartPainter p)
+            float iconFit, ChartData d, List<SourceSeries> all, IChartPainter p)
         {
             TagSeries s = d.Selected;
             long held = s.HeldTotal();
@@ -2104,6 +2118,13 @@ namespace LwfEconomyGraph
             float unit = fullHeight / d.RequiredCount;
             float top = baseline - fullHeight;
 
+            // ノルマを超えて持っていると、そのままでは列が枠を突き抜ける。
+            // 高さは 100% で頭打ちにするが、縮めるのは**列ぜんたい**に対して一度だけ。
+            // 段ごとに切ると、一番大きい段だけで列が埋まって内訳が消える
+            // （超過していること自体は見出しの「%」が伝える）
+            float stackH = (float)(held * fit) * unit;
+            float scale = (stackH > fullHeight) ? fullHeight / stackH : 1f;
+
             float yy = baseline;
             long shown = 0;
             for (int i = 0; i < _rank.Count; i++)
@@ -2112,19 +2133,72 @@ namespace LwfEconomyGraph
                 if (v <= 0) { continue; }
                 shown += v;
 
-                float h = (float)(v * fit) * unit;
+                float h = (float)(v * fit) * unit * scale;
                 if (h <= 0f) { continue; }
-                yy = Mathf.Max(top, yy - h);
-                p.Fill(new Rect(cx + 1f, yy, bw, Mathf.Max(1f, h)), _rankColors[i]);
+
+                float drawn = StackBand(cx, bw, top, ref yy, h, _rankColors[i], p);
+                if (drawn <= 0f) { break; }
+
+                // 済んだ列と同じ規則で段の中に絵を入れる。
+                // 進行中の列だけ絵が無いと、別の物を描いているように見える
+                if (iconFit >= 16f && drawn >= iconFit + 4f)
+                {
+                    Rect iconRect = new Rect(cx + 1f + (bw - iconFit) * 0.5f,
+                        yy + (drawn - iconFit) * 0.5f, iconFit, iconFit);
+                    DrawSourceIcon(iconRect, _rank[i], s.TagID, _rankColors[i], p);
+                }
             }
 
             long rest = held - shown;
             if (rest > 0)
             {
-                float h = (float)(rest * fit) * unit;
-                yy = Mathf.Max(top, yy - h);
-                p.Fill(new Rect(cx + 1f, yy, bw, Mathf.Max(1f, h)), OthersColor);
+                float h = (float)(rest * fit) * unit * scale;
+                StackBand(cx, bw, top, ref yy, h, OthersColor, p);
             }
+
+            // 超えた瞬間から出すと 1.02 倍で「×1」と書いてしまう。
+            // 数字が動いて見えるところまで待つ
+            float over = stackH / fullHeight;
+            if (over >= 1.05f)
+            {
+                DrawOverflowCap(cx + 1f, bw, baseline, over, p);
+            }
+        }
+
+        /// <summary>
+        /// ノルマを超えて持っている列は 100% で頭打ちにするので、超過ぶんは倍率で出す。
+        /// 列そのものを伸ばすと枠を突き抜けるし、全部の列を縮めると
+        /// 「1回ぶん＝満杯」という読み方が壊れる。
+        /// </summary>
+        private static void DrawOverflowCap(float x, float w, float baseline,
+            float ratio, IChartPainter p)
+        {
+            // 何倍持っているか。ラベル欄（進行中の列は番号を出さない場所）に置く
+            string label = "×" + ratio.ToString("0.#", CultureInfo.InvariantCulture);
+            float lw = p.Measure(label);
+            if (lw <= w + 6f)
+            {
+                p.Text(x + (w - lw) * 0.5f, baseline + 2f, label, Accent);
+            }
+        }
+
+        /// <summary>
+        /// 進行中の列に段を1つ積む。ノルマを超えて持っていると高さが枠を突き抜けるので、
+        /// **上端と高さの両方**を頭打ちにする。上端だけ抑えて高さをそのまま渡すと、
+        /// 帯が下へ伸びて枠の外（ゲームのUIの上）まではみ出す。
+        /// 超過そのものは見出しの「%」が持つので、列は 100% で止めてよい。
+        /// </summary>
+        /// <returns>実際に描いた高さ。余地が無ければ 0。</returns>
+        private static float StackBand(float cx, float bw, float top, ref float yy, float h,
+            Color color, IChartPainter p)
+        {
+            float room = yy - top;
+            if (room <= 0f) { return 0f; }
+
+            float drawn = Mathf.Min(h, room);
+            yy -= drawn;
+            p.Fill(new Rect(cx + 1f, yy, bw, Mathf.Max(1f, drawn)), color);
+            return drawn;
         }
 
         /// <summary>進行中の期の枠。縦線1本だと他の目盛りに紛れるので、列そのものを囲う。</summary>
