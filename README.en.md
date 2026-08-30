@@ -8,6 +8,8 @@ A mod for **Lazy Witch's Factory** that draws income and expense graphs into the
 
 It draws into the `under development` frame the stats window already has. Nothing about the game's look or progression is touched.
 
+**[Download the latest release](https://github.com/KiyonakaNata/lwf-economy-graph/releases/latest)**
+
 ---
 
 ## What it does

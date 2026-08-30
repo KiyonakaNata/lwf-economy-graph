@@ -10,6 +10,8 @@
 
 ゲームの見た目や進行には手を加えない
 
+**[最新版をダウンロード](https://github.com/KiyonakaNata/lwf-economy-graph/releases/latest)**
+
 ---
 
 ## できること
