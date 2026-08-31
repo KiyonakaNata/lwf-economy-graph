@@ -8,11 +8,11 @@ Draws income and expense graphs into the Statistics screen of **Lazy Witch's Fac
 
 Four views, switched from the toolbar under the graph.
 
-**Balance per repayment** — one bar per repayment, stacked by what actually paid for it. Hover a bar for the full breakdown of that repayment.
+**Balance per repayment** — one bar per repayment, stacked by what paid for it. Hover a bar for the full breakdown of that repayment.
 
 ![Breakdown per repayment](https://raw.githubusercontent.com/KiyonakaNata/lwf-economy-graph/main/img/composition-hover.png)
 
-**Factory balance** — the per-minute change of a resource, counting mining, production and deliveries only. One-off changes (relics, wands, land purchases, penalties) are left out. The moment you go into the red shows up as shape.
+**Factory balance** — the per-minute change of a resource, counting `Production` and `Sell Off` only. One-off changes (relics, wands, land purchases, penalties) are left out.
 
 ![Factory balance](https://raw.githubusercontent.com/KiyonakaNata/lwf-economy-graph/main/img/net-red.png)
 
@@ -20,7 +20,7 @@ Four views, switched from the toolbar under the graph.
 
 ![Balance over time](https://raw.githubusercontent.com/KiyonakaNata/lwf-economy-graph/main/img/balance-all.png)
 
-**Rate** — set the range to Past 1 Minute and it turns into a rate chart.
+**Rate** — set the range to `Past 1 Minute` for a rate chart.
 
 ![Rate](https://raw.githubusercontent.com/KiyonakaNata/lwf-economy-graph/main/img/rate.png)
 
@@ -32,19 +32,9 @@ Four views, switched from the toolbar under the graph.
 | Resource icon | Look at that resource (while overlaid: show / hide it) |
 | Hammer | Factory balance of the selected resource |
 | Triangle | Income ↔ Expenses |
-| Bar | Whole run ↔ Past 1 Minute |
+| Bar | Whole Game ↔ Past 1 Minute |
 | Stack | Breakdown per repayment |
 
-Resource, side and range stay in sync with the game's own Statistics tabs.
+The toolbar and the game's own tabs stay in sync — change either one.
 
-## Settings
-
-You should not need to touch these. They live in `BepInEx/config/kiyonakanata.lwfeconomygraph.cfg`, created once the game has run.
-
-| Key | Default | Meaning |
-|---|---|---|
-| `Enabled` | `true` | `false` stops both recording and drawing |
-| `EmbedInStatsWindow` | `true` | `false` draws in a separate panel instead |
-| `StartMode` | `0` | View to open with (0 = factory balance, 1 = balance over time, 2 = balance per repayment) |
-| `FontName` | empty | Set a font name only if text renders as □ (e.g. `Yu Gothic UI`) |
-| `IconOutlineWidth` | `0.05` | Width of the white outline on icons (`0` for none) |
+If the graph shows □ instead of text, set `FontName` (e.g. `Yu Gothic UI`) in `BepInEx/config/kiyonakanata.lwfeconomygraph.cfg`.
