@@ -1,0 +1,9 @@
+{
+  "name": "LwfEconomyGraph",
+  "version_number": "1.0.1",
+  "website_url": "https://github.com/KiyonakaNata/lwf-economy-graph",
+  "description": "Draws income and expense graphs into the game's own stats screen: a breakdown of every repayment, the factory's balance per minute, resource stocks over time, and last-minute rates.",
+  "dependencies": [
+    "BepInEx-BepInExPack-5.4.2305"
+  ]
+}
