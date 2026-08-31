@@ -4,13 +4,15 @@ Draws income and expense graphs into the stats screen of **Lazy Witch's Factory*
 
 The stats window already has an empty frame that says `under development` — this mod draws there. Nothing about the game's look or progression is touched, and it only reads numbers the game is already tracking.
 
-![Breakdown per repayment](https://raw.githubusercontent.com/KiyonakaNata/lwf-economy-graph/main/img/composition-hover.png)
+![The stats screen with the graph in place](https://raw.githubusercontent.com/KiyonakaNata/lwf-economy-graph/main/img/composition.png)
 
 ## What it shows
 
 Four views, switched from the toolbar under the graph.
 
 **Balance per repayment** — one bar per repayment, stacked by what actually paid for it. Hover a bar for the full breakdown of that repayment.
+
+![Breakdown per repayment](https://raw.githubusercontent.com/KiyonakaNata/lwf-economy-graph/main/img/composition-hover.png)
 
 **Factory balance** — the per-minute change of a resource, counting the factory only: mining, production and delivery. One-off changes (relics, staves, land purchases, penalties) are left out, so the line stays about the factory. The moment you go into the red shows up as shape.
 
