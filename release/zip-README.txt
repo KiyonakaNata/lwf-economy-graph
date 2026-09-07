@@ -1,6 +1,6 @@
 ﻿LWF Economy Graph
 Lazy Witch's Factory の統計画面に、収支のグラフを描き足す MOD
-Draws income / expense graphs into the game's stats screen
+Draws income and expense graphs into the game's Statistics screen
 
 ────────────────────────────────
 入れかた
@@ -18,6 +18,10 @@ Draws income / expense graphs into the game's stats screen
 
 4. ゲームを起動し、統計画面を開く
 
+MOD管理ソフトを使うなら Thunderstore から
+
+     https://thunderstore.io/c/lazy-witchs-factory/p/KiyonakaNata/LwfEconomyGraph/
+
 ────────────────────────────────
 消しかた
 ────────────────────────────────
@@ -30,7 +34,7 @@ BepInEx/plugins/LwfEconomyGraph.dll を消す
 
      https://github.com/KiyonakaNata/lwf-economy-graph
 
-Lazy Witch's Factory ver 0.24.1 / BepInEx 5.4.23.5 で確認
+Lazy Witch's Factory ver 0.27.0 / BepInEx 5.4.23.5 で確認
 非公式のMOD、公式のサポート対象外
 
 
@@ -50,7 +54,11 @@ Install
 
 3. Put LwfEconomyGraph.dll into BepInEx/plugins/
 
-4. Start the game and open the stats screen
+4. Start the game and open the Statistics screen
+
+With a mod manager, install from Thunderstore
+
+     https://thunderstore.io/c/lazy-witchs-factory/p/KiyonakaNata/LwfEconomyGraph/
 
 ────────────────────────────────
 Uninstall
@@ -63,7 +71,7 @@ Usage, settings, bug reports
 ────────────────────────────────
 
      https://github.com/KiyonakaNata/lwf-economy-graph
-     (written in Japanese)
+     (written in Japanese and English)
 
-Tested with Lazy Witch's Factory ver 0.24.1 / BepInEx 5.4.23.5
+Tested with Lazy Witch's Factory ver 0.27.0 / BepInEx 5.4.23.5
 Unofficial mod, not supported by the developer

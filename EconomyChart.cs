@@ -381,9 +381,10 @@ namespace LwfEconomyGraph
             "Cash", "Construction", "Grocery", "Luxury", "Fertilizer", "Chemical", "Magic", "Fuel"
         };
 
-        internal static readonly string[] KnownTagNamesJa = new string[8]
+        /// <summary>ゲームから名前が引けなかったときの控え。表記は英語版に合わせる。</summary>
+        internal static readonly string[] KnownTagNames = new string[8]
         {
-            "現金", "建材", "食品", "高級品", "肥料", "薬品", "魔力", "燃料"
+            "Cash", "Materials", "Food", "Luxury", "Fertilizer", "Chemicals", "Magic", "Fuel"
         };
 
         /// <summary>アイコンから色が引けなかったときの予備（KnownTagIDs の並び＋末尾はそれ以外）。</summary>

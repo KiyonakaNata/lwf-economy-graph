@@ -133,7 +133,7 @@ The record is gone when you quit the game or start the next run
 
 | | |
 |---|---|
-| Lazy Witch's Factory | built and checked on **ver 0.24.1** |
+| Lazy Witch's Factory | Tested on **ver 0.27.0** |
 | BepInEx | checked with **5.4.23.5** (any 5.4.x should do) |
 
 If a game update stops it from working, that is the end of this mod's life — remove it

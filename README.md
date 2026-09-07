@@ -122,7 +122,7 @@
 | 項目 | 既定 | 値 |
 |---|---|---|
 | `Enabled` | `true` | `false` で記録も表示も止まる |
-| `EmbedInStatsWindow` | `true` | `false` で統計窓ではなく別パネルに描く |
+| `EmbedInStatsWindow` | `true` | `false` で別パネルに描く |
 | `StartMode` | `0` | 0=工場の収支／1=残高の推移／2=返済区切りの収支情報 |
 | `FontName` | 空 | 文字が □ になるときだけ指定する（例 `Yu Gothic UI`） |
 | `IconOutlineWidth` | `0.05` | アイコンの白縁の太さ（`0` で縁なし） |
@@ -133,10 +133,10 @@
 
 | | |
 |---|---|
-| Lazy Witch's Factory | **ver 0.24.1** で作成・確認 |
+| Lazy Witch's Factory | **ver 0.27.0** で動作確認 |
 | BepInEx | **5.4.23.5** で確認（5.4.x なら動くはず） |
 
-本体の更新で動かなくなったら、このMODの寿命なので消すこと
+本体の更新で動かなくなったら消すこと
 
 ## うまく動かないとき
 

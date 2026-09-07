@@ -139,7 +139,7 @@ namespace LwfEconomyGraph
     {
         internal const string PluginGuid = "kiyonakanata.lwfeconomygraph";
         internal const string PluginName = "LWF Economy Graph";
-        internal const string PluginVersion = "1.0.1";
+        internal const string PluginVersion = "1.0.2";
 
         private static readonly Color ShadowColor = new Color(0f, 0f, 0f, 0.9f);
 
@@ -191,8 +191,8 @@ namespace LwfEconomyGraph
         /// <summary>本体に対応する語が無いものの控え。</summary>
         private static readonly string[] ReasonFallback = new string[ChartRenderer.ReasonCount]
         {
-            "その他", "注文", "売却", "レリック", "注文", "返済", "ペナルティ", "契約",
-            "リロール", "杖", "初期", "契約", "電話", "生産", "生産", "土地"
+            "Other", "Order", "Sell Off", "Relic", "Order", "Repayment", "Penalty", "Pact",
+            "Reroll", "Wand", "Initial", "Pact", "Phone", "Production", "Production", "Land Purchases"
         };
 
         // ------------------------------------------------------------------
@@ -372,64 +372,47 @@ namespace LwfEconomyGraph
         // ------------------------------------------------------------------
         private void Awake()
         {
-            _enabled = Config.Bind("General", "Enabled", true,
-                "false にすると記録も表示も止める（素のゲームと同じ挙動）");
-            _embedInStatsWindow = Config.Bind("General", "EmbedInStatsWindow", true,
-                "本体の統計窓（収支タブ）に用意されている空き枠にグラフを描く。"
-                + "false にすると自前のパネルだけになる");
-            _keepDataOnReload = Config.Bind("General", "KeepDataOnReload", false,
-                "ScriptEngine で読み直したとき、それまでの記録を引き継ぐ（開発用）。"
-                + "ScriptEngine を入れていなければ何も起きない。"
-                + "false にすると読み直しのたびに取り直す");
-            _autoShowOnResult = Config.Bind("General", "AutoShowOnResult", false,
-                "リザルトに入ったら自前のパネルを自動で出す。"
-                + "統計窓の枠に描いているなら不要（リザルトの「統計」から開けば出る）");
+            _enabled = Config.Bind("General", "Enabled", true, "");
+            _embedInStatsWindow = Config.Bind("General", "EmbedInStatsWindow", true, "");
+            _keepDataOnReload = Config.Bind("General", "KeepDataOnReload", false, "");
+            _autoShowOnResult = Config.Bind("General", "AutoShowOnResult", false, "");
 
             _bucketSecondsInitial = Config.Bind("Recording", "BucketSeconds", 1f,
-                "グラフ1本ぶんの時間（秒）。細かいほど詳しいが、上限を超えると自動で倍になる");
+                "seconds per bar");
             _maxBuckets = Config.Bind("Recording", "MaxBuckets", 1800,
-                "バケット数の上限。超えると2つずつ束ねて幅を倍にする（ラン全体が必ず収まる）");
+                "maximum bars");
             _maxRawEvents = Config.Bind("Recording", "MaxRawEvents", 300000,
-                "CSV 書き出し用にためる生ログの上限件数。0 でためない");
+                "0 = off");
 
             _startMode = Config.Bind("HUD", "StartMode", 0,
-                "起動時にどの表示から始めるか。0=工場の収支／1=残高の推移／2=返済区切りの収支情報");
+                "0 = balance, 1 = holdings, 2 = per repayment");
             _maxColumns = Config.Bind("HUD", "MaxColumns", 480,
-                "グラフを何本の縦棒で描くか。IMGUI は1本が描画1回なので、増やすほど重い");
+                "bars drawn");
             _iconOutline = Config.Bind("HUD", "IconOutlineWidth", 0.05f,
-                "アイコンの白縁の太さ（アイコンの大きさに対する割合）。0 で縁無し");
-            _fontSize = Config.Bind("HUD", "FontSize", 14,
-                "文字サイズ");
+                "share of the icon size, 0 = none");
+            _fontSize = Config.Bind("HUD", "FontSize", 14, "");
             _fontName = Config.Bind("HUD", "FontName", "",
-                "使うフォント名（例: Yu Gothic UI）。空なら Unity の既定フォント。日本語が □ になるときだけ指定する");
+                "empty = Unity default. Yu Gothic UI");
             _panelRect = Config.Bind("Layout", "PanelRect", "0.06,0.08,0.88,0.78",
-                "通常時のパネル位置（画面比 x,y,w,h）。ゲーム中に AdjustLayout キーで動かせる");
+                "x,y,w,h as a share of the screen");
             _resultPanelRect = Config.Bind("Layout", "ResultPanelRect", "0.05,0.50,0.62,0.46",
-                "リザルト時のパネル位置（画面比 x,y,w,h）");
+                "x,y,w,h as a share of the screen");
 
             // 統計窓の枠に描くようになってから、窓の操作（タグタブ・収入/支出タブ・
             // 累計/直近1分）にすべて従うようにしたので、その代わりのキーは要らなくなった。
             // 既定は空＝無効。処理そのものは残してある——
             // グラフの上にボタンを置くとき、そのまま呼べるようにするため。
-            _keyToggleSpec = Config.Bind("Keys", "Toggle", "",
-                "単独パネルの開閉。空で無効（統計窓の枠に描くので普段は要らない）");
-            _keyNextTagSpec = Config.Bind("Keys", "NextTag", "",
-                "次のタグ。空で無効（統計窓のタグタブに従うため）");
-            _keyPrevTagSpec = Config.Bind("Keys", "PrevTag", "",
-                "前のタグ。空で無効");
-            _keyExportSpec = Config.Bind("Keys", "ExportCsv", "F8", "CSV 書き出し");
+            _keyToggleSpec = Config.Bind("Keys", "Toggle", "", "empty = off");
+            _keyNextTagSpec = Config.Bind("Keys", "NextTag", "", "empty = off");
+            _keyPrevTagSpec = Config.Bind("Keys", "PrevTag", "", "empty = off");
+            _keyExportSpec = Config.Bind("Keys", "ExportCsv", "F8", "empty = off");
             _graphAreaWidth = Config.Bind("Layout", "GraphAreaWidth", 0,
-                "統計窓のグラフ枠の幅を広げる（本体の既定は 534、左のカード欄が 1068）。"
-                + "0 なら本体のまま触らない。例: 900 にするとカード欄が 702 に縮んでグラフが広くなる");
+                "0 = game default. 534 to 1068");
 
-            _keyCycleModeSpec = Config.Bind("Keys", "CycleMode", "F5",
-                "表示の切替：工場の収支→残高の推移→返済区切りの収支情報");
-            _keyCycleRangeSpec = Config.Bind("Keys", "CycleRange", "",
-                "横軸の範囲：全体／直近1分。空で無効（統計窓の「累計／直近1分」に従うため）");
-            _keyToggleSideSpec = Config.Bind("Keys", "ToggleSide", "",
-                "構成を収入側と支出側で切替。空で無効（統計窓の収入／支出タブに従うため）");
-            _keyAdjustSpec = Config.Bind("Keys", "AdjustLayout", "",
-                "レイアウト調整モードの ON/OFF。矢印で移動、Shift+矢印で大きさ、Ctrl+矢印で1px単位。抜けると設定に保存する");
+            _keyCycleModeSpec = Config.Bind("Keys", "CycleMode", "F5", "empty = off");
+            _keyCycleRangeSpec = Config.Bind("Keys", "CycleRange", "", "empty = off");
+            _keyToggleSideSpec = Config.Bind("Keys", "ToggleSide", "", "empty = off");
+            _keyAdjustSpec = Config.Bind("Keys", "AdjustLayout", "", "empty = off");
 
             _keyToggle = Hotkey.Parse(_keyToggleSpec.Value);
             _keyNextTag = Hotkey.Parse(_keyNextTagSpec.Value);
@@ -454,9 +437,9 @@ namespace LwfEconomyGraph
             catch (Exception) { gameVersion = "?"; }
 
             Logger.LogInfo("[boot] " + PluginName + " " + PluginVersion
-                + "  (ゲーム " + gameVersion + ")"
-                + "  " + _keyToggleSpec.Value + ":開閉  " + _keyExportSpec.Value + ":CSV  "
-                + _keyAdjustSpec.Value + ":レイアウト");
+                + "  (game " + gameVersion + ")"
+                + "  " + _keyToggleSpec.Value + ":panel  " + _keyExportSpec.Value + ":CSV  "
+                + _keyAdjustSpec.Value + ":layout");
         }
 
         private void OnDestroy()
@@ -674,11 +657,11 @@ namespace LwfEconomyGraph
 
                 _hasRun = true;
                 _seeded = true;   // 引き継いだのだから、開始時の所持は取り直さない
-                Logger.LogInfo("[state] 記録を引き継いだ（" + events + " 件 / 返済 " + _repaidTotal + " 回）");
+                Logger.LogInfo("[state] carried over " + events + " records, " + _repaidTotal + " repayments");
             }
             catch (Exception e)
             {
-                Logger.LogWarning("記録の引き継ぎに失敗（新しく取り直す）: " + e);
+                Logger.LogWarning("[state] cannot carry over the records; recording from scratch: " + e);
                 _replaying = false;
                 _requiredTag = null;
                 ResetRun();
@@ -703,7 +686,7 @@ namespace LwfEconomyGraph
                     null);
                 if (ctor == null)
                 {
-                    Logger.LogWarning("記録係のコンストラクタが見つからない。定期的に探す方に落ちる");
+                    Logger.LogWarning("[hook] ResourceTagsRecorder constructor not found; falling back to polling");
                     return;
                 }
 
@@ -716,7 +699,7 @@ namespace LwfEconomyGraph
             }
             catch (Exception e)
             {
-                Logger.LogWarning("記録係の生成を捕まえられなかった（定期的に探す方に落ちる）: " + e.Message);
+                Logger.LogWarning("[hook] cannot patch the recorder; falling back to polling: " + e.Message);
                 _patched = false;
             }
 
@@ -736,7 +719,7 @@ namespace LwfEconomyGraph
                     BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
                 if (target == null)
                 {
-                    Logger.LogWarning("土地購入が見つからない（その他のままになる）");
+                    Logger.LogWarning("[hook] LandPurchaseManager.TryPurchase not found; land purchases stay under Other");
                     return;
                 }
 
@@ -752,7 +735,7 @@ namespace LwfEconomyGraph
             }
             catch (Exception e)
             {
-                Logger.LogWarning("土地購入を挟めなかった（その他のままになる）: " + e.Message);
+                Logger.LogWarning("[hook] cannot patch land purchases; they stay under Other: " + e.Message);
             }
         }
 
@@ -788,7 +771,7 @@ namespace LwfEconomyGraph
             }
             catch (Exception e)
             {
-                ReportBreakdown("記録", e);
+                ReportBreakdown("record", e);
             }
         }
 
@@ -804,15 +787,14 @@ namespace LwfEconomyGraph
             _failures++;
             if (_failures <= 3)
             {
-                Logger.LogError("[" + where + "] 例外: " + e);
+                Logger.LogError("[" + where + "] exception: " + e);
             }
 
             if (_failures >= FailureLimit && !_brokenDown)
             {
                 _brokenDown = true;
-                Logger.LogError("例外が " + FailureLimit + " 回続いたので、このMODを止めました。"
-                    + "本体の更新で内部の作りが変わった可能性があります。"
-                    + "設定の Enabled を false にすれば警告も出ません");
+                Logger.LogError("[stop] " + FailureLimit + " exceptions in a row; the mod is now off."
+                    + " Set Enabled = false in the config to silence this.");
             }
         }
 
@@ -933,7 +915,7 @@ namespace LwfEconomyGraph
             while (_closedColumns < progress)
             {
                 CloseColumn();
-                Logger.LogInfo("[run] 返済 " + _closedColumns + " 回目（イベント無し）  " + FormatTime(_elapsed));
+                Logger.LogInfo("[run] repayment " + _closedColumns + " (no event)  " + FormatTime(_elapsed));
             }
         }
 
@@ -1006,7 +988,7 @@ namespace LwfEconomyGraph
             if (!_loggedFrameFound)
             {
                 _loggedFrameFound = true;
-                Logger.LogInfo("[stats] 収支グラフの枠に描いている（under development を退けた）");
+                Logger.LogInfo("[stats] drawing in the balance graph frame");
             }
         }
 
@@ -1102,8 +1084,8 @@ namespace LwfEconomyGraph
             if (_runEndElapsed < 0.0)
             {
                 _runEndElapsed = _elapsed;
-                Logger.LogInfo("[run] 終了。経過 " + FormatTime(_elapsed)
-                    + " / 記録 " + TotalRecordCount() + " 件");
+                Logger.LogInfo("[run] end at " + FormatTime(_elapsed)
+                    + ", " + TotalRecordCount() + " records");
             }
 
             if (_isResultShown) { return; }
@@ -1114,7 +1096,7 @@ namespace LwfEconomyGraph
 
             _isResultShown = true;
             if (_autoShowOnResult.Value) { _visible = true; }
-            Logger.LogInfo("[run] リザルト画面を検出した");
+            Logger.LogInfo("[run] result window is up");
         }
 
         private static bool IsResultWindowUp()
@@ -1185,12 +1167,12 @@ namespace LwfEconomyGraph
                 if (first && main != null)
                 {
                     SeedInitialBalances(main);
-                    Logger.LogInfo("[run] 記録を開始した（記録係 " + _subscribed.Count + " 件）");
+                    Logger.LogInfo("[run] recording, " + _subscribed.Count + " recorders");
                 }
             }
             catch (Exception e)
             {
-                Logger.LogError("記録係への購読に失敗しました: " + e);
+                Logger.LogError("[run] cannot subscribe to the recorders: " + e);
             }
         }
 
@@ -1529,7 +1511,7 @@ namespace LwfEconomyGraph
             catch (Exception) { }
 
             int idx = ChartRenderer.KnownIndex(tagID);
-            if (idx < ChartRenderer.KnownTagNamesJa.Length) { return ChartRenderer.KnownTagNamesJa[idx]; }
+            if (idx < ChartRenderer.KnownTagNames.Length) { return ChartRenderer.KnownTagNames[idx]; }
             return tagID;
         }
 
@@ -1613,7 +1595,7 @@ namespace LwfEconomyGraph
 
             _bucketSeconds *= 2f;
             _bucketCount = (_bucketCount + 1) / 2;
-            Logger.LogInfo("[graph] バケット幅を " + F(_bucketSeconds) + " 秒にした");
+            Logger.LogInfo("[graph] bar width is now " + F(_bucketSeconds) + " s");
         }
 
         private long TotalRecordCount()
@@ -1643,7 +1625,7 @@ namespace LwfEconomyGraph
             if (_keyCycleRange != null && _keyCycleRange.WasPressedThisFrame(kb))
             {
                 _lastMinute = !_lastMinute;
-                Say(_lastMinute ? "直近1分" : "全体");
+                Say(RangeName(_lastMinute));
             }
             if (_keyToggleSide != null && _keyToggleSide.WasPressedThisFrame(kb))
             {
@@ -1659,8 +1641,8 @@ namespace LwfEconomyGraph
                 {
                     _adjustMode = true;
                     _visible = true;
-                    Say("レイアウト調整モード：矢印=移動  Shift+矢印=大きさ  Ctrl+矢印=1px  "
-                        + _keyAdjustSpec.Value + "=確定");
+                    Say("Layout  move: arrows  size: Shift+arrows  step 1px: Ctrl+arrows  done: "
+                        + _keyAdjustSpec.Value);
                 }
             }
 
@@ -1711,7 +1693,7 @@ namespace LwfEconomyGraph
             _adjustMode = false;
             try { Config.Save(); }
             catch (Exception) { }
-            Say("レイアウトを保存した： " + CurrentRectEntry().Value);
+            Say("Layout saved: " + CurrentRectEntry().Value);
         }
 
         private ConfigEntry<string> CurrentRectEntry()
@@ -1760,7 +1742,7 @@ namespace LwfEconomyGraph
         // ------------------------------------------------------------------
         private void ExportCsv()
         {
-            if (_series.Count == 0) { Say("書き出すものが無い（記録が空）"); return; }
+            if (_series.Count == 0) { Say("No records to export"); return; }
 
             try
             {
@@ -1775,7 +1757,7 @@ namespace LwfEconomyGraph
                   .Append(" bucket_seconds=").Append(F(_bucketSeconds))
                   .Append(" records=").Append(TotalRecordCount())
                   .Append(" raw=").Append(_evT.Count)
-                  .Append(_rawEventsTruncated ? " (上限で打ち切り)" : "")
+                  .Append(_rawEventsTruncated ? " (truncated at MaxRawEvents)" : "")
                   .Append('\n');
                 sb.Append("t_sec,tag,delta,balance,reason,source\n");
 
@@ -1793,13 +1775,13 @@ namespace LwfEconomyGraph
                 }
 
                 File.WriteAllText(path, sb.ToString(), new UTF8Encoding(true));
-                Logger.LogInfo("CSV を書き出した: " + path);
-                Say("CSV を書き出した： " + path);
+                Logger.LogInfo("[csv] wrote " + path);
+                Say("CSV: " + path);
             }
             catch (Exception e)
             {
-                Logger.LogError("CSV の書き出しに失敗しました: " + e);
-                Say("CSV の書き出しに失敗： " + e.Message);
+                Logger.LogError("[csv] cannot write the file: " + e);
+                Say("CSV failed: " + e.Message);
             }
         }
 
@@ -1821,6 +1803,21 @@ namespace LwfEconomyGraph
         // ------------------------------------------------------------------
         // 描画
         // ------------------------------------------------------------------
+        /// <summary>横軸の範囲の名前。ゲームの語を使い、引けなければ英語の控えを出す。</summary>
+        private static string RangeName(bool lastMinute)
+        {
+            string key = lastMinute ? "StatsRangeLastMinute" : "StatsRangeTotal";
+            try
+            {
+                string name = LocalizedTextGetter.GetLocalizedText(
+                    LocalizationInitializer.StringTableType.Message, key);
+                name = StripRichText(name);
+                if (!string.IsNullOrEmpty(name)) { return name; }
+            }
+            catch (Exception) { }
+            return lastMinute ? "Past 1 Minute" : "Whole Game";
+        }
+
         private void Say(string msg)
         {
             _message = msg;
@@ -1833,7 +1830,7 @@ namespace LwfEconomyGraph
             if (Event.current.type != EventType.Repaint) { return; }
 
             try { DrawFrame(); }
-            catch (Exception e) { ReportBreakdown("描画", e); }
+            catch (Exception e) { ReportBreakdown("draw", e); }
         }
 
         private void DrawFrame()
@@ -1960,7 +1957,7 @@ namespace LwfEconomyGraph
                     }
                     catch (Exception) { }
                 }
-                if (_menuObjects.Count == 0) { Logger.LogWarning("メニューの開閉を読めなかった"); }
+                if (_menuObjects.Count == 0) { Logger.LogWarning("[menu] cannot read the open state"); }
             }
 
             for (int i = 0; i < _menuObjects.Count; i++)
@@ -2959,7 +2956,7 @@ namespace LwfEconomyGraph
 
                     if (method == null)
                     {
-                        Logger.LogWarning("統計窓の " + methodName + " が見つからない（窓の外でだけ切り替わる）");
+                        Logger.LogWarning("[stats] " + methodName + " not found; the window will not follow the mod");
                     }
                 }
 
@@ -2967,7 +2964,7 @@ namespace LwfEconomyGraph
             }
             catch (Exception e)
             {
-                Logger.LogWarning("統計窓の " + methodName + " を呼べなかった: " + e.Message);
+                Logger.LogWarning("[stats] cannot call " + methodName + ": " + e.Message);
             }
         }
 
@@ -2986,7 +2983,7 @@ namespace LwfEconomyGraph
                 }
                 catch (Exception) { field = null; }
                 _statsFields[fieldName] = field;
-                if (field == null) { Logger.LogWarning("統計窓の " + fieldName + " を読めなかった"); }
+                if (field == null) { Logger.LogWarning("[stats] cannot read " + fieldName); }
             }
             if (field == null) { return null; }
             try { return field.GetValue(_statsWindow); }
