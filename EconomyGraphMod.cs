@@ -18,7 +18,9 @@
 // （納品口ごとの記録係を、探索せずに生成の瞬間に掴むため）。
 //
 //   GameStateManager.Instance.GetTagsRecorder().OnTagRecorded
-//     → TagRecordedEvent(tagID, delta, newTotal, isAdd, statsCashReason, statsSourceID)
+//     → TagRecordedEvent(tagID, delta, newTotal, isAdd, statsCashReason, statsSourceID, saleItemCountDelta)
+//       （saleItemCountDelta は 0.29.1 で増えた。統計窓の売却個数用でここでは使わない。
+//        引数が増えると古い DLL は MissingMethodException で起動を止めるので、版ごとにビルドし直す）
 //
 // タグ（現金・建材・食品…）の増減が1件ずつ、理由15種つきで流れてくる。
 // 記録係は納品口（ポータル）ごとに別にあり、従の記録係で受けた分は
@@ -139,7 +141,7 @@ namespace LwfEconomyGraph
     {
         internal const string PluginGuid = "kiyonakanata.lwfeconomygraph";
         internal const string PluginName = "LWF Economy Graph";
-        internal const string PluginVersion = "1.0.2";
+        internal const string PluginVersion = "1.0.3";
 
         private static readonly Color ShadowColor = new Color(0f, 0f, 0f, 0.9f);
 
@@ -370,7 +372,25 @@ namespace LwfEconomyGraph
         // ------------------------------------------------------------------
         // 起動
         // ------------------------------------------------------------------
+        // 本体は 0.29.1 から、起動中に例外が出るとゲームごと起動を止める（エラー画面）。
+        // 本体の更新で参照先が変わっても MOD だけ止まって起動は通るよう、全部を受け止める
         private void Awake()
+        {
+            try
+            {
+                Boot();
+            }
+            catch (Exception e)
+            {
+                Logger.LogWarning("[boot] " + PluginName + " " + PluginVersion
+                    + " disabled (the game version may have changed): " + e);
+                try { if (_harmony != null) { _harmony.UnpatchSelf(); } }
+                catch (Exception e2) { Logger.LogWarning("[boot] unpatch failed: " + e2.Message); }
+                enabled = false;
+            }
+        }
+
+        private void Boot()
         {
             _enabled = Config.Bind("General", "Enabled", true, "");
             _embedInStatsWindow = Config.Bind("General", "EmbedInStatsWindow", true, "");
@@ -428,7 +448,11 @@ namespace LwfEconomyGraph
             _mode = Mathf.Clamp(_startMode.Value, 0, ChartRenderer.ModeCount - 1);
             PatchRecorderConstructor();
             AttachStore();
-            RestoreState();
+            // 持ち越しは開発用（F6 の読み直し）。本体の型が変わるとメソッドごと読めなくなる
+            // （0.29.1 で TagRecordedEvent の引数が増え、ここで起動が止まった）ので、
+            // 失敗しても持ち越しを諦めるだけにする
+            try { RestoreState(); }
+            catch (Exception e) { Logger.LogWarning("[boot] could not restore the previous data: " + e.Message); }
 
             // ゲームの版も出す。不具合の報告にログを添えてもらえば、
             // どの版で起きたのかが一目で分かる

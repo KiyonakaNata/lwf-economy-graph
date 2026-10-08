@@ -87,7 +87,22 @@ if (Test-Path $tsSrc) {
     New-Item -ItemType Directory -Path $tsStage -Force | Out-Null
 
     Copy-Item $icon -Destination $tsStage -Force
+    # Thunderstore は README.md の UTF-8 BOM を弾く（raven_qol で 2026-09-01 に実際に弾かれた）。編集スクリプトが
+    # utf-8-sig で書くと混入するので、詰める前に見る
+    foreach ($name in @('README.md', 'manifest.json')) {
+        $bytes = [System.IO.File]::ReadAllBytes((Join-Path $tsSrc $name))
+        if ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) {
+            throw "$name が UTF-8 BOM 付きです。BOM 無しで保存し直してください"
+        }
+    }
     Copy-Item (Join-Path $tsSrc 'README.md') -Destination $tsStage -Force
+    # CHANGELOG.md は release\ 直下のものを共用（Thunderstore の Changelog タブに出る）。BOM は README と同じく弾く
+    $changelog = Join-Path $here 'CHANGELOG.md'
+    $clBytes = [System.IO.File]::ReadAllBytes($changelog)
+    if ($clBytes.Length -ge 3 -and $clBytes[0] -eq 0xEF -and $clBytes[1] -eq 0xBB -and $clBytes[2] -eq 0xBF) {
+        throw "CHANGELOG.md が UTF-8 BOM 付きです。BOM 無しで保存し直してください"
+    }
+    Copy-Item $changelog -Destination $tsStage -Force
     [System.IO.File]::WriteAllText((Join-Path $tsStage 'manifest.json'), $manifestText,
         (New-Object System.Text.UTF8Encoding($false)))
 
@@ -102,6 +117,7 @@ if (Test-Path $tsSrc) {
         @{ Path = (Join-Path $tsStage 'manifest.json'); Name = 'manifest.json' },
         @{ Path = (Join-Path $tsStage 'icon.png');      Name = 'icon.png' },
         @{ Path = (Join-Path $tsStage 'README.md');     Name = 'README.md' },
+        @{ Path = (Join-Path $tsStage 'CHANGELOG.md');  Name = 'CHANGELOG.md' },
         @{ Path = $dll; Name = 'BepInEx/plugins/LwfEconomyGraph.dll' }
     )
     $archive = [System.IO.Compression.ZipFile]::Open($tsZip, 'Create')
