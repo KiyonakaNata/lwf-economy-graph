@@ -45,22 +45,28 @@ namespace LwfEconomyGraph
             "All",
             "AllCritByTime",
             "Amethyst",
+            "Ash",
             "BuffGemMagic",
             "CancelGetFam",
             "Cash",
             "CashByLandTime",
+            "ChainExplosion",   // DestructionIncome の絵から
             "Chemical",
             "Cinnabar",
+            "ClonePlant",
+            "CloneRock",
+            "CloneSafe",
             "Cobalt",
             "Coin",
             "Compost",
             "Construction",
+            "ConsumeFarmer",
+            "ConsumeHarvestable",
             "ConvertOnRAllFuel",
             "Conveyor2Supplies",
             "ConveyorSpeedByTime",
             "ConveyorSupplies",
             "Crafter",   // Summon-Crafter の絵から
-            "CrimeCoin",
             "CrimeContract",
             "CrimeLand",
             "Debug1",   // Orichalcum の絵から
@@ -68,12 +74,15 @@ namespace LwfEconomyGraph
             "Debug3",   // Lye の絵から
             "Debug4",   // Coin の絵から
             "Debug5",   // MagicChunk の絵から
+            "DestructionIncome",
             "FakeCoin",
             "FakeStamp",
-            "FamExpense",
             "FamIncome",
+            "Farmer",   // Summon-Farmer の絵から
             "FasterOrder",
             "Fertilizer",
+            "FertilizerFree",
+            "FreeChemical",   // Chemical の絵から
             "FreeLand",
             "FreeLandSupplies",
             "Fuel",
@@ -83,10 +92,12 @@ namespace LwfEconomyGraph
             "Grocery",
             "Gunpowder",
             "HDAStamp",
+            "HarvestableSale",   // Cash の絵から
             "Honey",
             "Hourglass",
             "IntervalChemical",
             "IntervalCrafter",
+            "IntervalFarmer",
             "IntervalFuel",
             "IntervalGrocery",
             "IntervalMagic",
@@ -106,19 +117,28 @@ namespace LwfEconomyGraph
             "MagicChunk",
             "MagicToCash",   // Coin の絵から
             "Mercury",
+            "MinePlant",
+            "MineRock",
+            "MineSafe",
             "Monitoring",
             "Mushroom",
             "Mythril",
             "Nitro",
             "Oil",
             "Olive",
+            "OnCloneRefundRock",
+            "OnCloneRefundSafe",
+            "OnConsumeFarmerConveyor",
+            "OnCraftBackItem",
             "OnDeliveryPatronResources",
+            "OnOpenSafeCash",
             "OnPurchaseTag1",
             "OnPurchaseTag6",
             "OrderTag6ByAll",
             "Orichalcum",
             "Pickaxe",
             "ReduceSkillCost",
+            "RelicAddConsumeCobaltRuby",
             "RelicAllSmelter",
             "RelicAmethyst",
             "RelicCobalt",
@@ -134,7 +154,9 @@ namespace LwfEconomyGraph
             "RepaymentLoseCash",
             "RoyalStraightFlush",   // Mythril の絵から
             "Ruby",
+            "Safe",
             "Salt",
+            "SingleDirectionMining",
             "Smelter",   // Summon-Smelter の絵から
             "SmelterSpeedByTime",
             "Smuggling",
@@ -154,6 +176,10 @@ namespace LwfEconomyGraph
             "Summon-Transporter",
             "Summon-TransporterExit",
             "Summon-Worker",
+            "SummonCrafterFromMagicPellet",   // Summon-Crafter の絵から
+            "SummonSmelterFromMagicPellet",   // Summon-Smelter の絵から
+            "SummonTransporterFromMagicPellet",   // Summon-Transporter の絵から
+            "SummonWorkerFromMagicPellet",   // Summon-Worker の絵から
             "Summoner",   // Summon-Summoner の絵から
             "SummonerSpeed",
             "SusPowder",
@@ -175,6 +201,7 @@ namespace LwfEconomyGraph
             "TradeCrafterFuelCoin",   // Coin の絵から
             "TradeCrafterFuelSplitter2",   // Summon-Splitter2 の絵から
             "TradeCrafterGoldOreCoin",   // Coin の絵から
+            "TradeCrafterGunpowderFuel",   // Fuel の絵から
             "TradeCrafterIronCoin",   // Coin の絵から
             "TradeCrafterIronOreFuelPickaxe",   // Pickaxe の絵から
             "TradeCrafterIronOreGold",   // Gold の絵から
@@ -183,8 +210,10 @@ namespace LwfEconomyGraph
             "TradeCrafterJadeWoodIron",   // Iron の絵から
             "TradeCrafterLuxurySplitter2",   // Summon-Splitter2 の絵から
             "TradeCrafterMagicSplitter2",   // Summon-Splitter2 の絵から
+            "TradeCrafterNitroFuel",   // Fuel の絵から
             "TradeCrafterOliveFuelGunpowder",   // Gunpowder の絵から
             "TradeCrafterOliveWoodGunpowder",   // Gunpowder の絵から
+            "TradeCrafterRubyFuel",   // Fuel の絵から
             "TradeCrafterRubyFuelGunpowder",   // Gunpowder の絵から
             "TradeCrafterRubyNitro",   // Nitro の絵から
             "TradeCrafterRubyWoodGunpowder",   // Gunpowder の絵から
@@ -195,6 +224,7 @@ namespace LwfEconomyGraph
             "TradeCrafterWaxFuelGunpowder",   // Gunpowder の絵から
             "TradeCrafterWaxWoodGunpowder",   // Gunpowder の絵から
             "TradeCrafterWoodCoin",   // Coin の絵から
+            "TradeCrafterWoodFuel",   // Fuel の絵から
             "TradeCrafterWoodIron",   // Iron の絵から
             "TradeSmelterBlueSoda",   // Soda の絵から
             "TradeSmelterChemicalCinnabar",   // Cinnabar の絵から
@@ -233,6 +263,7 @@ namespace LwfEconomyGraph
             "TradeSmelterGroceryLemonade",   // Lemonade の絵から
             "TradeSmelterGroceryLye",   // Lye の絵から
             "TradeSmelterGrocerySoda",   // Soda の絵から
+            "TradeSmelterIntervalSmelter",   // IntervalSmelter の絵から
             "TradeSmelterIronOreCinnabar",   // Cinnabar の絵から
             "TradeSmelterIronOreSalt",   // Salt の絵から
             "TradeSmelterLuxuryCompost",   // Compost の絵から
@@ -248,25 +279,59 @@ namespace LwfEconomyGraph
             "TradeSmelterMagicLye",   // Lye の絵から
             "TradeSmelterMagicSoda",   // Soda の絵から
             "TradeSmelterNoneMushroom",   // Mushroom の絵から
+            "TradeSmelterRelicOrderTag6Long",   // RelicOrderTag6 の絵から
+            "TradeSmelterRelicOrderTag6Short",   // RelicOrderTag6 の絵から
             "TradeSmelterWoodMushroom",   // Mushroom の絵から
             "TradeSummoneCreateFam2",   // Summon-Worker の絵から
             "TradeSummoneCreateFam4",   // Summon-Transporter の絵から
+            "TradeSummoneCreateFam5",   // Summon-Farmer の絵から
             "TradeSummoneCreateFam6",   // Summon-Smelter の絵から
             "TradeSummoneCreateFam8",   // Summon-Crafter の絵から
+            "TradeSummoneMercuryIntervalMagic",   // IntervalMagic の絵から
+            "TradeSummoneSaleFam2",   // FamIncome の絵から
+            "TradeSummoneSaleFam4",   // FamIncome の絵から
+            "TradeSummoneSaleFam6",   // FamIncome の絵から
+            "TradeSummoneSaleFam7",   // FamIncome の絵から
+            "TradeSummoneSaleFam8",   // FamIncome の絵から
             "TradeSummonerAdamantite",   // Adamantite の絵から
             "TradeSummonerAmethystFromBuff",   // Amethyst の絵から
             "TradeSummonerAmethystIncrease",   // Amethyst の絵から
             "TradeSummonerAmethystRock",   // Amethyst の絵から
             "TradeSummonerAmethystTag",   // Amethyst の絵から
+            "TradeSummonerCheapRelicAmethyst",   // RelicAmethyst の絵から
+            "TradeSummonerCheapRelicCobalt",   // RelicCobalt の絵から
+            "TradeSummonerCheapRelicJade",   // RelicJade の絵から
+            "TradeSummonerCheapRelicRuby",   // RelicRuby の絵から
             "TradeSummonerCobaltFromBuff",   // Cobalt の絵から
             "TradeSummonerCobaltIncrease",   // Cobalt の絵から
             "TradeSummonerCobaltRock",   // Cobalt の絵から
             "TradeSummonerCobaltTag",   // Cobalt の絵から
+            "TradeSummonerGemPowderIntervalMagic",   // IntervalMagic の絵から
             "TradeSummonerJadeFromBuff",   // Jade の絵から
             "TradeSummonerJadeIncrease",   // Jade の絵から
             "TradeSummonerJadeRock",   // Jade の絵から
             "TradeSummonerJadeTag",   // Jade の絵から
             "TradeSummonerMythril",   // Mythril の絵から
+            "TradeSummonerNoneItemAmethyst",   // Magic の絵から
+            "TradeSummonerNoneItemCobalt",   // Magic の絵から
+            "TradeSummonerNoneItemJade",   // Magic の絵から
+            "TradeSummonerNoneItemRuby",   // Magic の絵から
+            "TradeSummonerNoneTagChemical",   // Magic の絵から
+            "TradeSummonerNoneTagConstruction",   // Magic の絵から
+            "TradeSummonerNoneTagFuel",   // Magic の絵から
+            "TradeSummonerNoneTagLuxury",   // Magic の絵から
+            "TradeSummonerRelicAmethyst_Cobalt",   // RelicAmethyst の絵から
+            "TradeSummonerRelicAmethyst_Jade",   // RelicAmethyst の絵から
+            "TradeSummonerRelicAmethyst_Ruby",   // RelicAmethyst の絵から
+            "TradeSummonerRelicCobalt_Amethyst",   // RelicCobalt の絵から
+            "TradeSummonerRelicCobalt_Jade",   // RelicCobalt の絵から
+            "TradeSummonerRelicCobalt_Ruby",   // RelicCobalt の絵から
+            "TradeSummonerRelicJade_Amethyst",   // RelicJade の絵から
+            "TradeSummonerRelicJade_Cobalt",   // RelicJade の絵から
+            "TradeSummonerRelicJade_Ruby",   // RelicJade の絵から
+            "TradeSummonerRelicRuby_Amethyst",   // RelicRuby の絵から
+            "TradeSummonerRelicRuby_Cobalt",   // RelicRuby の絵から
+            "TradeSummonerRelicRuby_Jade",   // RelicRuby の絵から
             "TradeSummonerRubyFromBuff",   // Ruby の絵から
             "TradeSummonerRubyIncrease",   // Ruby の絵から
             "TradeSummonerRubyRock",   // Ruby の絵から
@@ -274,7 +339,6 @@ namespace LwfEconomyGraph
             "Transporter",   // Summon-Transporter の絵から
             "Wand",
             "Wax",
-            "WingPen",
             "Wood",
             "Worker",   // Summon-Worker の絵から
             "WorkerIncome",
@@ -287,22 +351,28 @@ namespace LwfEconomyGraph
             0xC77E4Fu,
             0xC78421u,
             0x8754C7u,
+            0xC7C7C7u,
             0xC74B59u,
             0xC71D2Eu,
             0xC79D5Cu,
             0xC7A16Du,
+            0xC76DBAu,
             0x3671C7u,
             0xC73B77u,
+            0xC7A16Du,
+            0xC7A16Du,
+            0xC7A16Du,
             0x2459D0u,
             0xE5B436u,
             0xC7816Du,
             0x6AC759u,
+            0xC74946u,
+            0xC73D44u,
             0xCC4A32u,
             0x00C767u,
             0x059AC7u,
             0x0196C7u,
             0xD27175u,
-            0xC73339u,
             0xC73339u,
             0xC7A06Du,
             0x6EDBE3u,
@@ -310,12 +380,15 @@ namespace LwfEconomyGraph
             0x63ADDFu,
             0xE5B436u,
             0x6DC7B2u,
+            0xC76DBAu,
             0xF5B527u,
             0x8A3CF7u,
-            0xC75048u,
             0xC79F6Du,
+            0xC76D82u,
             0xC74337u,
             0xC735B9u,
+            0xEA9981u,
+            0x3671C7u,
             0xC7A06Du,
             0xC8A16Eu,
             0xCA4931u,
@@ -325,10 +398,12 @@ namespace LwfEconomyGraph
             0xC79E35u,
             0x6DA1C7u,
             0xDF6368u,
+            0xC79D5Cu,
             0xF5D275u,
             0xDA3038u,
             0x5087D2u,
             0x6D96C7u,
+            0xC7486Eu,
             0xF39E16u,
             0xC77A4Du,
             0xC7515Bu,
@@ -348,19 +423,28 @@ namespace LwfEconomyGraph
             0x6DC7B2u,
             0xE5B436u,
             0x6DA3C7u,
+            0xD1A973u,
+            0xD1A973u,
+            0xD1A973u,
             0xC76D85u,
             0x6289C7u,
             0xC486F8u,
             0xC74D40u,
             0xF5D276u,
             0xAFC74Au,
+            0x82C76Du,
+            0x90C76Du,
+            0x00C768u,
+            0xEB7D81u,
             0x0C99C7u,
+            0xC6C7C6u,
             0x866DC7u,
             0x648AC7u,
             0x6DC0C7u,
             0x6EDBE3u,
             0xC7876Du,
             0x2AC7C7u,
+            0x144CC7u,
             0x6DBFC7u,
             0x8855C7u,
             0x2357CCu,
@@ -376,25 +460,31 @@ namespace LwfEconomyGraph
             0xC74C44u,
             0xC486F8u,
             0xDA4C5Cu,
+            0xC79613u,
             0xE17C95u,
+            0xC7C1C0u,
             0x6DC1C7u,
             0x7FC765u,
             0xC5BFC7u,
             0x62D1F9u,
             0x00CBEFu,
-            0xC77259u,
+            0xF6F5F2u,
             0xF9BD11u,
             0xC7BA6Du,
             0x0094C7u,
             0x00C766u,
             0xD27175u,
-            0xFAF5F7u,
+            0xC76D82u,
             0x6DC1C7u,
             0x00CBEFu,
             0x01C767u,
             0x6D77C7u,
             0xBB6EC8u,
             0xC7746Du,
+            0xC79B51u,
+            0xD27175u,
+            0x6DC1C7u,
+            0xBB6EC8u,
             0xC79B51u,
             0x6D77C7u,
             0x27BBC7u,
@@ -417,6 +507,7 @@ namespace LwfEconomyGraph
             0xE5B436u,
             0x01C767u,
             0xE5B436u,
+            0xCA4931u,
             0xE5B436u,
             0xC7876Du,
             0xFEDE72u,
@@ -425,8 +516,10 @@ namespace LwfEconomyGraph
             0x85C76Du,
             0x01C767u,
             0x01C767u,
+            0xCA4931u,
             0x6DA1C7u,
             0x6DA1C7u,
+            0xCA4931u,
             0x6DA1C7u,
             0xC74D40u,
             0x6DA1C7u,
@@ -437,6 +530,7 @@ namespace LwfEconomyGraph
             0x6DA1C7u,
             0x6DA1C7u,
             0xE5B436u,
+            0xCA4931u,
             0x85C76Du,
             0x62D1F9u,
             0xC73B77u,
@@ -475,6 +569,7 @@ namespace LwfEconomyGraph
             0xE2BD51u,
             0x63ADDFu,
             0x62D1F9u,
+            0x6DBBC7u,
             0xC73B77u,
             0xE17C95u,
             0xC7816Du,
@@ -490,25 +585,59 @@ namespace LwfEconomyGraph
             0x63ADDFu,
             0x62D1F9u,
             0x6289C7u,
+            0x6DBFC7u,
+            0x6DBFC7u,
             0x6289C7u,
             0xC79B51u,
             0xBB6EC8u,
+            0xC76D82u,
             0x6DC1C7u,
             0xD27175u,
+            0xC7515Bu,
+            0xC79F6Du,
+            0xC79F6Du,
+            0xC79F6Du,
+            0xC79F6Du,
+            0xC79F6Du,
             0xE35A33u,
             0x8754C7u,
             0x8754C7u,
             0x8754C7u,
             0x8754C7u,
+            0x8855C7u,
+            0x2357CCu,
+            0x51C748u,
+            0xD24C5Bu,
             0x2459D0u,
             0x2459D0u,
             0x2459D0u,
             0x2459D0u,
+            0xC7515Bu,
             0x51C748u,
             0x51C748u,
             0x51C748u,
             0x51C748u,
             0xC486F8u,
+            0x2BC7C7u,
+            0x2BC7C7u,
+            0x2BC7C7u,
+            0x2BC7C7u,
+            0x2BC7C7u,
+            0x2BC7C7u,
+            0x2BC7C7u,
+            0x2BC7C7u,
+            0x8855C7u,
+            0x8855C7u,
+            0x8855C7u,
+            0x2357CCu,
+            0x2357CCu,
+            0x2357CCu,
+            0x51C748u,
+            0x51C748u,
+            0x51C748u,
+            0xD24C5Bu,
+            0xD24C5Bu,
+            0xD24C5Bu,
             0xDA4C5Cu,
             0xDA4C5Cu,
             0xDA4C5Cu,
@@ -516,7 +645,6 @@ namespace LwfEconomyGraph
             0xBB6EC8u,
             0xD4AB75u,
             0xEEC756u,
-            0x6D82C7u,
             0xD18651u,
             0xC79B51u,
             0xCBC470u,

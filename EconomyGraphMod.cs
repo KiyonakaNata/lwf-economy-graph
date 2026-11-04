@@ -22,7 +22,7 @@
 //       （saleItemCountDelta は 0.29.1 で増えた。統計窓の売却個数用でここでは使わない。
 //        引数が増えると古い DLL は MissingMethodException で起動を止めるので、版ごとにビルドし直す）
 //
-// タグ（現金・建材・食品…）の増減が1件ずつ、理由15種つきで流れてくる。
+// タグ（現金・建材・食品…）の増減が1件ずつ、理由17種つきで流れてくる。
 // 記録係は納品口（ポータル）ごとに別にあり、従の記録係で受けた分は
 // **自分のイベントしか発火しない**（主へは無音で数だけ足す）ので、全部に繋ぐ。
 // 残高のほうはイベントから取らず、主の記録係を毎フレーム見る
@@ -54,6 +54,7 @@ using BepInEx;
 using BepInEx.Configuration;
 using HarmonyLib;
 using Map.Ownership;
+using Pact.Pacts.LandPacts;
 using GameState;
 using Items;
 using Items.Craft;
@@ -141,7 +142,7 @@ namespace LwfEconomyGraph
     {
         internal const string PluginGuid = "kiyonakanata.lwfeconomygraph";
         internal const string PluginName = "LWF Economy Graph";
-        internal const string PluginVersion = "1.0.3";
+        internal const string PluginVersion = "1.0.4";
 
         private static readonly Color ShadowColor = new Color(0f, 0f, 0f, 0.9f);
 
@@ -170,7 +171,10 @@ namespace LwfEconomyGraph
             "",              // TelephoneExpense
             "",              // CraftIncome
             "",              // CraftExpense
-            "FreeLand"       // 土地購入（本体には無い。土地無料券の絵を借りる）
+            "",              // TaxExpense
+            "",              // CostRefund    （返金はレリックの絵が出る）
+            "FreeLand",      // 土地購入（本体には無い。土地無料券の絵を借りる）
+            ""               // 地面師（本体には無い。マモンの顔を下で当てる）
         };
 
         /// <summary>
@@ -187,14 +191,16 @@ namespace LwfEconomyGraph
         {
             "StatsReasonOther", "Order", "StatsColumnSale", "Relic", "Order", "Repayment",
             "DebuffRelic", "Pact", "StatsReasonOther", "StatsReasonOther", "StatsReasonOther",
-            "Pact", "StatsReasonOther", "StatsColumnProduction", "StatsColumnProduction", ""
+            "Pact", "StatsReasonOther", "StatsColumnProduction", "StatsColumnProduction", "Tax",
+            "StatsReasonOther", "", "Pact"
         };
 
         /// <summary>本体に対応する語が無いものの控え。</summary>
         private static readonly string[] ReasonFallback = new string[ChartRenderer.ReasonCount]
         {
             "Other", "Order", "Sell Off", "Relic", "Order", "Repayment", "Penalty", "Pact",
-            "Reroll", "Wand", "Initial", "Pact", "Phone", "Production", "Production", "Land Purchases"
+            "Reroll", "Wand", "Initial", "Pact", "Phone", "Production", "Production", "Tax",
+            "Refund", "Land Purchases", "Land Swindler"
         };
 
         // ------------------------------------------------------------------
@@ -220,6 +226,9 @@ namespace LwfEconomyGraph
         private ConfigEntry<string> _keyPrevTagSpec;
         private ConfigEntry<string> _keyExportSpec;
         private ConfigEntry<string> _keyAdjustSpec;
+#if DEV_TOOLS
+        private ConfigEntry<string> _keyInjectSpec;
+#endif
         private ConfigEntry<string> _keyCycleModeSpec;
         private ConfigEntry<string> _keyCycleRangeSpec;
         private ConfigEntry<string> _keyToggleSideSpec;
@@ -229,6 +238,9 @@ namespace LwfEconomyGraph
         private Hotkey _keyPrevTag;
         private Hotkey _keyExport;
         private Hotkey _keyAdjust;
+#if DEV_TOOLS
+        private Hotkey _keyInject;
+#endif
         private Hotkey _keyCycleMode;
         private Hotkey _keyCycleRange;
         private Hotkey _keyToggleSide;
@@ -258,10 +270,19 @@ namespace LwfEconomyGraph
         /// （LandPurchaseManager.TryPurchase が素の TryConsume を呼ぶ）。
         /// 購入している間だけ旗を立てて、こちらで区別する。
         /// </summary>
-        private const int LandReason = 15;
+        private const int LandReason = 17;
+
+        /// <summary>
+        /// 本体に無い理由。契約「地面師」の現金は契約の効果（PactEffectIncome）として出所なしで入るので、
+        /// 他の契約の収入と混ざる。効果を実行している間だけ旗を立てて、こちらで区別する。
+        /// </summary>
+        private const int LandCrimeReason = 18;
 
         /// <summary>土地の購入処理の中にいるか。記録は同じ呼び出しの中で流れてくる</summary>
         private static bool InLandPurchase;
+
+        /// <summary>地面師の効果の中にいるか。ExecuteEffect は待たずに同じ呼び出しの中で現金を足す</summary>
+        private static bool InLandCrime;
 
         private Harmony _harmony;
         private bool _patched;
@@ -358,10 +379,8 @@ namespace LwfEconomyGraph
         private readonly Dictionary<string, Sprite> _sourceSprites = new Dictionary<string, Sprite>(StringComparer.Ordinal);
         private readonly Dictionary<int, Texture2D> _silhouettes = new Dictionary<int, Texture2D>();
         private readonly string[] _reasonNames = new string[ChartRenderer.ReasonCount];
-        private Sprite _gehennaFace;
-        private bool _gehennaFaceResolved;
+        private readonly Sprite[] _faces = new Sprite[FacePatrons.Length];
         private float _nextFaceProbe;
-        private int _faceAttempts;
         private readonly List<Sprite> _silhouettePending = new List<Sprite>();
         private readonly ChartData _chart = new ChartData();
         private readonly ChartRenderer _renderer = new ChartRenderer();
@@ -433,12 +452,18 @@ namespace LwfEconomyGraph
             _keyCycleRangeSpec = Config.Bind("Keys", "CycleRange", "", "empty = off");
             _keyToggleSideSpec = Config.Bind("Keys", "ToggleSide", "", "empty = off");
             _keyAdjustSpec = Config.Bind("Keys", "AdjustLayout", "", "empty = off");
+#if DEV_TOOLS
+            _keyInjectSpec = Config.Bind("Keys", "InjectSamples", "", "dev only. empty = off");
+#endif
 
             _keyToggle = Hotkey.Parse(_keyToggleSpec.Value);
             _keyNextTag = Hotkey.Parse(_keyNextTagSpec.Value);
             _keyPrevTag = Hotkey.Parse(_keyPrevTagSpec.Value);
             _keyExport = Hotkey.Parse(_keyExportSpec.Value);
             _keyAdjust = Hotkey.Parse(_keyAdjustSpec.Value);
+#if DEV_TOOLS
+            _keyInject = Hotkey.Parse(_keyInjectSpec.Value);
+#endif
             _keyCycleMode = Hotkey.Parse(_keyCycleModeSpec.Value);
             _keyCycleRange = Hotkey.Parse(_keyCycleRangeSpec.Value);
             _keyToggleSide = Hotkey.Parse(_keyToggleSideSpec.Value);
@@ -479,13 +504,14 @@ namespace LwfEconomyGraph
             }
             NewRecorders.Clear();
             InLandPurchase = false;
+            InLandCrime = false;
         }
 
         // ------------------------------------------------------------------
         // 読み直しをまたぐ記録の持ち越し（開発用）
         // ------------------------------------------------------------------
-        private const string StateKey = "lwf.economygraph.store.v2";
-        private const int StoreVersion = 2;
+        private const string StateKey = "lwf.economygraph.store.v3";
+        private const int StoreVersion = 3;
         private const int StoreSlots = 14;
 
         // 目盛りの置き場所（_scalars の添字）
@@ -652,8 +678,9 @@ namespace LwfEconomyGraph
                     string sourceID = (_evSource[i] >= 0 && _evSource[i] < _sourceIDs.Count)
                         ? _sourceIDs[_evSource[i]] : null;
 
-                    // 土地購入はこちらで足した理由番号なので、旗ではなくログの値をそのまま使う
+                    // 土地購入・地面師はこちらで足した理由番号なので、旗ではなくログの値をそのまま使う
                     InLandPurchase = false;
+                    InLandCrime = false;
                     OnTagRecorded(new TagRecordedEvent(_storeTagIDs[tag], Math.Abs(_evDelta[i]), _evBalance[i],
                         _evDelta[i] > 0, (StatsCashReason)_evReason[i], sourceID));
                 }
@@ -728,6 +755,37 @@ namespace LwfEconomyGraph
             }
 
             PatchLandPurchase();
+            PatchLandCrime();
+        }
+
+        /// <summary>
+        /// 地面師の効果を挟む。旗の立て方は土地購入と同じ。
+        /// 外れても他の契約の収入に混ざるだけなので、警告だけ出して続ける。
+        /// </summary>
+        private void PatchLandCrime()
+        {
+            try
+            {
+                MethodInfo target = typeof(CashByLandCrimePact).GetMethod("ExecuteEffect",
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                if (target == null)
+                {
+                    Logger.LogWarning("[hook] CashByLandCrimePact.ExecuteEffect not found; Land Swindler stays under Pact");
+                    return;
+                }
+
+                MethodInfo begin = typeof(EconomyGraphPlugin).GetMethod("LandCrimeBegin",
+                    BindingFlags.Static | BindingFlags.NonPublic);
+                MethodInfo end = typeof(EconomyGraphPlugin).GetMethod("LandCrimeEnd",
+                    BindingFlags.Static | BindingFlags.NonPublic);
+
+                if (_harmony == null) { _harmony = new Harmony(PluginGuid); }
+                _harmony.Patch(target, prefix: new HarmonyMethod(begin), finalizer: new HarmonyMethod(end));
+            }
+            catch (Exception e)
+            {
+                Logger.LogWarning("[hook] cannot patch Land Swindler; it stays under Pact: " + e.Message);
+            }
         }
 
         /// <summary>
@@ -778,6 +836,16 @@ namespace LwfEconomyGraph
             InLandPurchase = false;
         }
 
+        private static void LandCrimeBegin()
+        {
+            InLandCrime = true;
+        }
+
+        private static void LandCrimeEnd()
+        {
+            InLandCrime = false;
+        }
+
         // ------------------------------------------------------------------
         // 毎フレーム
         // ------------------------------------------------------------------
@@ -790,7 +858,7 @@ namespace LwfEconomyGraph
                 TrackGame();
                 TrackStatsWindow();
                 BuildPendingSilhouettes();
-                ResolveGehennaFace();
+                ResolveFaces();
                 HandleInput();
             }
             catch (Exception e)
@@ -1150,11 +1218,39 @@ namespace LwfEconomyGraph
 
                 try
                 {
-                    _subscriptions.Add(recorder.OnTagRecorded.Subscribe(new Action<TagRecordedEvent>(OnTagRecorded)));
+                    Subscribe(recorder);
                 }
                 catch (Exception) { }
             }
             NewRecorders.Clear();
+        }
+
+        /// <summary>
+        /// 記録係に繋ぐ。従（納品口ごと）の記録係から来た**支出は捨てる**。
+        ///
+        /// 従の記録係は、受けた分を主へ黙って足す（AddRecordWithoutNotice）が、
+        /// 引くときは自分の分しか減らさない（TryConsumeInternal）。
+        /// 納品口の依頼が払いを受け取ると（TributeDemand → OrderExpense）従だけが減り、
+        /// 主の残高はそのまま残る。それを数えると、払っていない額が支出に積まれる
+        /// （激流コンベアの納品口に現金10を入れて返済すると、返済10と注文10の両方が出る。
+        /// 本体の統計窓も同じ数え方をしている）。
+        /// </summary>
+        private void Subscribe(ResourceTagsRecorder recorder)
+        {
+            _subscriptions.Add(recorder.OnTagRecorded.Subscribe(new Action<TagRecordedEvent>(delegate (TagRecordedEvent ev)
+            {
+                if (!ev.isAdd && !IsMainRecorder(recorder)) { return; }
+                OnTagRecorded(ev);
+            })));
+        }
+
+        private bool IsMainRecorder(ResourceTagsRecorder recorder)
+        {
+            ResourceTagsRecorder main = null;
+            try { main = _boundGame != null ? _boundGame.GetTagsRecorder() : null; }
+            catch (Exception) { main = null; }
+            // 主が分からないうちは捨てない（従と決めつけて本物の支出を落とさない）
+            return main == null || ReferenceEquals(main, recorder);
         }
 
         /// <summary>
@@ -1170,7 +1266,7 @@ namespace LwfEconomyGraph
                 ResourceTagsRecorder main = _boundGame.GetTagsRecorder();
                 if (main != null && _subscribed.Add(main))
                 {
-                    _subscriptions.Add(main.OnTagRecorded.Subscribe(new Action<TagRecordedEvent>(OnTagRecorded)));
+                    Subscribe(main);
                 }
 
                 // Include は読み込み済みの全オブジェクトを walk するので重い。
@@ -1185,7 +1281,7 @@ namespace LwfEconomyGraph
                     ResourceTagsRecorder recorder = depositors[i].GetRecorder();
                     if (recorder == null || !_subscribed.Add(recorder)) { continue; }
 
-                    _subscriptions.Add(recorder.OnTagRecorded.Subscribe(new Action<TagRecordedEvent>(OnTagRecorded)));
+                    Subscribe(recorder);
                 }
 
                 if (first && main != null)
@@ -1348,6 +1444,7 @@ namespace LwfEconomyGraph
 
             // 土地の購入だけは本体が理由を付けないので、こちらで付け直す
             if (InLandPurchase && !ev.isAdd && reason == (int)StatsCashReason.Other) { reason = LandReason; }
+            if (InLandCrime && ev.isAdd && reason == (int)StatsCashReason.PactEffectIncome) { reason = LandCrimeReason; }
 
             double t = _elapsed;
             int bucket = (int)(t / _bucketSeconds);
@@ -1454,7 +1551,8 @@ namespace LwfEconomyGraph
                 || r == StatsCashReason.BuffRelicIncome
                 || r == StatsCashReason.DebuffPenaltyExpense
                 || r == StatsCashReason.CraftIncome
-                || r == StatsCashReason.CraftExpense;
+                || r == StatsCashReason.CraftExpense
+                || r == StatsCashReason.CostRefund;
         }
 
         private static void AddSource(Dictionary<string, long> dict, string sourceID, int delta)
@@ -1670,10 +1768,50 @@ namespace LwfEconomyGraph
                 }
             }
 
+#if DEV_TOOLS
+            if (_keyInject != null && _keyInject.WasPressedThisFrame(kb)) { InjectSamples(); }
+#endif
+
             HandleIconClick();
 
             if (_adjustMode) { HandleAdjust(kb); }
         }
+
+#if DEV_TOOLS
+        /// <summary>
+        /// 開発用。滅多に出ない出所の見た目（色・絵・顔）を確かめるために、
+        /// その出所から現金が入ったことにしたイベントをこちらの記録にだけ流す。
+        /// 本体の資源や統計窓の数字には触らない（残高の線も動かない）。
+        /// 押すたびに同じ額を足すので、何度か押すと構成グラフの上位に上がってくる。
+        /// </summary>
+        private void InjectSamples()
+        {
+            const int amount = 10000;
+            OnTagRecorded(new TagRecordedEvent("Cash", amount, 0, true, StatsCashReason.BuffRelicIncome, "OnOpenSafeCash"));   // トロフィー
+            OnTagRecorded(new TagRecordedEvent("Cash", amount, 0, true, StatsCashReason.CraftIncome, "ChainExplosion"));       // 大満足
+            OnTagRecorded(new TagRecordedEvent("Cash", amount, 0, true, StatsCashReason.CraftIncome, "HarvestableSale"));      // 採掘ポイントの売却
+            // 苗の返金は交配で払った肥料が戻るもの。現金には出ない
+            OnTagRecorded(new TagRecordedEvent("Fertilizer", amount, 0, true, StatsCashReason.CostRefund, "OnCloneRefundRock"));   // 鉱物の苗
+            OnTagRecorded(new TagRecordedEvent("Fertilizer", amount, 0, true, StatsCashReason.CostRefund, "OnCloneRefundSafe"));   // 金庫の苗
+
+            // 地面師は本物と同じく旗を立てて流す（付け直しの経路ごと確かめる）
+            InLandCrime = true;
+            try { OnTagRecorded(new TagRecordedEvent("Cash", amount, 0, true, StatsCashReason.PactEffectIncome)); }
+            finally { InLandCrime = false; }
+
+            // 返済（ゲヘナの顔）。ノルマのタグで流すと列が閉じてしまうので、ノルマでないタグの支出にする。
+            // 支出は手元の台帳を新しい収入から減らすので、上で収入を入れたタグ（現金・肥料）は避ける。
+            // 課税を流さないのも同じ理由（入れたばかりの収入が消えてアイコンが出なくなる）
+            string repayTag = string.Equals(_requiredTag, "Food", StringComparison.Ordinal) ? "Luxury" : "Food";
+            OnTagRecorded(new TagRecordedEvent(repayTag, amount, 0, false, StatsCashReason.RepaymentExpense));
+
+            // 統計窓に埋め込んでいるときは Say が見えないので、ログにも残す
+            string note = "Injected samples (MOD records only): +" + amount.ToString("N0", CultureInfo.InvariantCulture)
+                + " each, repayment on " + repayTag;
+            Say(note);
+            Logger.LogInfo("[dev] " + note);
+        }
+#endif
 
         private void CycleTag(int direction)
         {
@@ -1820,6 +1958,7 @@ namespace LwfEconomyGraph
         private static string ReasonEnumName(int reason)
         {
             if (reason == LandReason) { return "LandPurchase"; }
+            if (reason == LandCrimeReason) { return "LandSwindler"; }
             if (reason < 0 || reason >= ChartRenderer.ReasonCount) { return "Unknown"; }
             return ((StatsCashReason)reason).ToString();
         }
@@ -2189,6 +2328,14 @@ namespace LwfEconomyGraph
                     if (silhouette != null)
                     {
                         float step = Mathf.Max(1f, r.width * _owner._iconOutline.Value);
+
+                        // 顔は上半身の絵から頭を切り出したもので、首や髪の切り口が枠に接している。
+                        // そこにも縁を付けると頭が切り離されて見える（生首）ので、
+                        // 縁は枠の内側にだけ描く。枠に接した切り口には縁が付かない
+                        bool clip = _owner.IsFace(sp);
+                        Rect area = r;
+                        if (clip) { GUI.BeginGroup(r); area = new Rect(0f, 0f, r.width, r.height); }
+
                         Color old = GUI.color;
                         GUI.color = outline;
                         for (int dx = -1; dx <= 1; dx++)
@@ -2196,11 +2343,13 @@ namespace LwfEconomyGraph
                             for (int dy = -1; dy <= 1; dy++)
                             {
                                 if (dx == 0 && dy == 0) { continue; }
-                                Rect offset = new Rect(r.x + dx * step, r.y + dy * step, r.width, r.height);
+                                Rect offset = new Rect(area.x + dx * step, area.y + dy * step, area.width, area.height);
                                 GUI.DrawTexture(SpriteDest(offset, sp), silhouette, ScaleMode.StretchToFill, true);
                             }
                         }
                         GUI.color = old;
+
+                        if (clip) { GUI.EndGroup(); }
                     }
                 }
 
@@ -2227,12 +2376,9 @@ namespace LwfEconomyGraph
                 return GetTagSprite(tagID);
             }
 
-            // 納品はゲヘナの顔。本体が自分の UI で顔アイコンに使っているものをそのまま借りる
-            if (reason == (int)StatsCashReason.RepaymentExpense)
-            {
-                Sprite face = GetGehennaFace();
-                if (face != null) { return face; }
-            }
+            // 納品はゲヘナ、地面師はマモンの顔。本体が自分の UI で顔アイコンに使っているものをそのまま借りる
+            int faceIndex = FaceIndex(reason);
+            if (faceIndex >= 0 && _faces[faceIndex] != null) { return _faces[faceIndex]; }
 
             string tag = ReasonIconTag[reason];
             if (string.IsNullOrEmpty(tag)) { return GetTagSprite(tagID); }
@@ -2280,71 +2426,140 @@ namespace LwfEconomyGraph
         private int _craftIconTries;
 
         /// <summary>
-        /// 納品に当てるゲヘナの顔。
-        ///
-        /// ゲーム内の顔アイコンは InGameFaceIcons という 4x4 のシートに入っていて、
-        /// **右下のコマ**がゲヘナ。立ち絵（portrait_patron_*）は縮めると潰れるので、
-        /// 最初から小さく描かれているこちらを切り取って使う。
-        /// 切り取りは Sprite.Create で矩形を指すだけ（画素は読まないので isReadable は不要）。
-        /// シートが見つからなければ本体の顔アイコンに落ちる。
+        /// 顔を当てる理由と、その後援者（並びを揃える）。納品はゲヘナ、地面師はマモン。
         /// </summary>
-        private Sprite GetGehennaFace()
+        private static readonly Patron[] FacePatrons = new Patron[] { Patron.Gehenna, Patron.Mammon };
+        private static readonly int[] FaceReasons = new int[] { (int)StatsCashReason.RepaymentExpense, LandCrimeReason };
+
+        /// <summary>
+        /// 顔の表情。マモンはキラキラ、ゲヘナは笑顔（Discord の絵文字のように顔だけを切って出す）。
+        ///
+        /// どちらもアドレスが無い（Addressables のキーに無い）ので、読み込み済みの絵を名前で探す。
+        /// マモンのキラキラは顔シートのコマで、事務所用（150px）を先に、ゲーム内用（100px）を次に見る。
+        /// ゲヘナの笑顔の立ち絵は InGame の場面が直接持っている。
+        /// 見つからなければ本体の顔アイコン（通常の表情）に落ちる。構図はどれもほぼ同じ。
+        /// </summary>
+        private static readonly string[][] FaceSpriteNames = new string[][]
         {
-            return _gehennaFace;
+            new string[] { "portrait_patron_gehenna_smile" },
+            new string[] { "pic_patron_Mammon_shiny", "pic_patron_Mammon_shiny_0" }
+        };
+
+        /// <summary>
+        /// 顔の絵から顔だけを切る枠（絵に対する割合・左上原点で x, y, 幅, 高さ）。
+        /// 元は胸元や小物まで入った上半身で、アイコンの大きさに縮めると表情が潰れる。
+        /// 枠は Discord の絵文字（:lwf_mammon_kirakira: / :lwf_gehenna_smile:）に重ねて合わせた
+        /// </summary>
+        private static readonly Rect[] FaceCrops = new Rect[]
+        {
+            new Rect(0.39f, 0.27f, 0.49f, 0.49f),   // ゲヘナ
+            new Rect(0.47f, 0.25f, 0.46f, 0.46f)    // マモン
+        };
+
+        private int _faceAttempts;
+
+        /// <summary>
+        /// コマの一部を指す絵を作る。Sprite.Create は矩形を指すだけなので画素は読まない
+        /// （isReadable は要らない）。作れなければ元の絵のまま返す。
+        /// </summary>
+        private static Sprite CropFace(Sprite sp, Rect crop)
+        {
+            try
+            {
+                Rect tr = sp.textureRect;   // 左下原点・画素
+                float w = tr.width * crop.width;
+                float h = tr.height * crop.height;
+                float x = tr.x + tr.width * crop.x;
+                float y = tr.y + tr.height * (1f - crop.y - crop.height);
+                return Sprite.Create(sp.texture, new Rect(x, y, w, h), new Vector2(0.5f, 0.5f),
+                    sp.pixelsPerUnit, 0, SpriteMeshType.FullRect);
+            }
+            catch (Exception) { return sp; }
+        }
+
+        private static int FaceIndex(int reason)
+        {
+            for (int i = 0; i < FaceReasons.Length; i++)
+            {
+                if (FaceReasons[i] == reason) { return i; }
+            }
+            return -1;
         }
 
         /// <summary>
-        /// ゲヘナの顔を用意する。**描画からは呼ばない**——
-        /// シート探しは Resources.FindObjectsOfTypeAll で全テクスチャを走査するので、
-        /// 描画のたびに呼ぶと（アイコン1つごとに）確実に重くなる。
-        /// Update から数回だけ試して、駄目なら本体の顔アイコンで打ち切る。
+        /// 顔を用意する。**描画からは呼ばない**——読み込み済みの絵を名前で探すのは
+        /// Resources.FindObjectsOfTypeAll の全走査なので、描画のたびに呼ぶと重くなる。
+        ///
+        /// 以前は InGameFaceIcons のシートを位置で切っていたが、0.30 でシートが 4x4 から 5x4 になり
+        /// 並びも入れ替わって別人が出た。名前とアドレスで引けばシートの並びに左右されない。
+        /// 間を空けて数回だけ試し、決まらなければ本体の顔アイコン（通常の表情）で打ち切る。
         /// </summary>
-        private void ResolveGehennaFace()
+        private void ResolveFaces()
         {
-            if (_gehennaFaceResolved) { return; }
+            bool missing = false;
+            for (int i = 0; i < _faces.Length; i++)
+            {
+                if (_faces[i] == null) { missing = true; break; }
+            }
+            if (!missing) { return; }
             if (Time.unscaledTime < _nextFaceProbe) { return; }
             _nextFaceProbe = Time.unscaledTime + 3f;
             _faceAttempts++;
 
-            Texture2D sheet = FindTexture("InGameFaceIcons");
-            if (sheet != null)
+            Sprite[] loaded = null;
+            for (int i = 0; i < _faces.Length; i++)
             {
-                try
-                {
-                    float w = sheet.width * 0.25f;
-                    float h = sheet.height * 0.25f;
-                    // Rect の原点は左下。右下のコマは x=3/4, y=0
-                    _gehennaFace = Sprite.Create(sheet, new Rect(sheet.width - w, 0f, w, h),
-                        new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect);
-                    _gehennaFaceResolved = true;
-                    return;
-                }
-                catch (Exception) { _gehennaFace = null; }
-            }
+                if (_faces[i] != null) { continue; }
 
-            if (_faceAttempts >= 5)
-            {
-                // 見つからないものを探し続けない。立ち絵で妥協して打ち切る
-                try { _gehennaFace = Patrons.GetFaceIcon(Patron.Gehenna); }
-                catch (Exception) { _gehennaFace = null; }
-                _gehennaFaceResolved = true;
+                string from = null;
+                Sprite sp = null;
+
+                if (FaceSpriteNames[i].Length > 0)
+                {
+                    if (loaded == null)
+                    {
+                        try { loaded = Resources.FindObjectsOfTypeAll<Sprite>(); }
+                        catch (Exception) { loaded = new Sprite[0]; }
+                    }
+                    sp = FindSprite(loaded, FaceSpriteNames[i]);
+                    if (sp != null) { from = sp.name; }
+                }
+
+                if (sp == null && _faceAttempts >= 5)
+                {
+                    try { sp = Patrons.GetFaceIcon(FacePatrons[i]); }
+                    catch (Exception) { sp = null; }
+                    if (sp != null) { from = "Patrons.GetFaceIcon"; }
+                }
+
+                if (sp == null) { continue; }
+                _faces[i] = CropFace(sp, FaceCrops[i]);
+                Logger.LogInfo("[face] " + FacePatrons[i] + " from " + from);
             }
         }
 
-        private static Texture2D FindTexture(string name)
+        private bool IsFace(Sprite sp)
         {
-            try
+            for (int i = 0; i < _faces.Length; i++)
             {
-                Texture2D[] all = Resources.FindObjectsOfTypeAll<Texture2D>();
-                for (int i = 0; i < all.Length; i++)
+                if (_faces[i] != null && ReferenceEquals(_faces[i], sp)) { return true; }
+            }
+            return false;
+        }
+
+        private static Sprite FindSprite(Sprite[] loaded, string[] names)
+        {
+            // 並びは優先順。先の名前が見つかればそれを使う
+            for (int n = 0; n < names.Length; n++)
+            {
+                for (int i = 0; i < loaded.Length; i++)
                 {
-                    if (all[i] != null && string.Equals(all[i].name, name, StringComparison.Ordinal))
+                    if (loaded[i] != null && string.Equals(loaded[i].name, names[n], StringComparison.Ordinal))
                     {
-                        return all[i];
+                        return loaded[i];
                     }
                 }
             }
-            catch (Exception) { }
             return null;
         }
 
@@ -2357,8 +2572,7 @@ namespace LwfEconomyGraph
             if (reason < 0 || reason >= ChartRenderer.ReasonCount) { return string.Empty; }
 
             // 専用の絵があるものは絵だけで分かるので、名前は出さない
-            if (!string.IsNullOrEmpty(ReasonIconTag[reason])
-                || reason == (int)StatsCashReason.RepaymentExpense)
+            if (!string.IsNullOrEmpty(ReasonIconTag[reason]) || FaceIndex(reason) >= 0)
             {
                 return string.Empty;
             }
@@ -2835,15 +3049,18 @@ namespace LwfEconomyGraph
             Sprite cached;
             if (_sourceSprites.TryGetValue(sourceKey, out cached)) { return cached; }
 
+            // レシピはタグより先に引く。本体の統計窓もクラフトは作る物の絵を出すし、
+            // レシピと同名のタグ（ChainExplosion＝コマンド「連鎖爆発」）があると、
+            // 作る物（大満足）とは別の絵を拾って色とも食い違う
             Sprite sp = null;
             try { sp = ItemParamGetter.GetSprite(sourceKey); }
             catch (Exception) { sp = null; }
+            if (sp == null) { sp = GetRecipeResultSprite(sourceKey); }
             if (sp == null)
             {
                 try { sp = TagParamGetter.GetSprite(sourceKey); }
                 catch (Exception) { sp = null; }
             }
-            if (sp == null) { sp = GetRecipeResultSprite(sourceKey); }
             if (sp == null) { sp = GetTagSprite(tagID); }
 
             _sourceSprites[sourceKey] = sp;

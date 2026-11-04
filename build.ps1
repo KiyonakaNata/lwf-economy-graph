@@ -13,6 +13,8 @@
 
 param(
     [switch]$NoDeploy,
+    # 配布用。開発用の機能（F9 の試し入れ＝DEV_TOOLS）を抜いてビルドする
+    [switch]$Release,
     # 別の場所に入れている場合はここを書き換えるか -Game で指す
     [string]$Game = "D:\SteamLibrary\steamapps\common\Lazy Witch's Factory"
 )
@@ -98,7 +100,7 @@ $cscArgs = @(
     # 無いと SymbolsNotFoundException で読み込みに失敗する
     '/debug:pdbonly',
     "/out:`"$outDll`""
-) + $refs + ($sources | ForEach-Object { "`"$_`"" })
+) + $(if ($Release) { @() } else { @('/define:DEV_TOOLS') }) + $refs + ($sources | ForEach-Object { "`"$_`"" })
 
 Write-Host "ビルド中: $outDll"
 $psi = New-Object System.Diagnostics.ProcessStartInfo

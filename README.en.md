@@ -133,21 +133,22 @@ The record is gone when you quit the game or start the next run
 
 | | |
 |---|---|
-| Lazy Witch's Factory | Tested on **ver 0.29.1** |
+| Lazy Witch's Factory | Tested on **ver 0.31.1** |
 | BepInEx | checked with **5.4.23.5** (any 5.4.x should do) |
 
 If a game update stops it from working, that is the end of this mod's life — remove it
 
 ## When it doesn't work
 
-Look at `BepInEx/LogOutput.log` first. The mod logs in Japanese, so the lines below are quoted as they appear
+Look at `BepInEx/LogOutput.log` first
 
 | Log | Where you stand |
 |---|---|
 | no `[boot] LWF Economy Graph ...` line | **Not loaded** — check where the DLL ended up |
-| `統計窓の ... が見つからない` | **The graph works** — the toolbar won't stay in sync with the game's window |
-| `土地購入を挟めなかった` | **The graph works** — land purchases land under "Other" |
-| `例外が 20 回続いたので、このMODを止めました` | **The mod stopped itself** — restart the game |
+| `[stats] ... not found` | **The graph works** — the toolbar won't stay in sync with the game's window |
+| `[hook] ... land purchases ...` | **The graph works** — land purchases land under "Other" |
+| `[hook] ... Land Swindler ...` | **The graph works** — Land Swindler income lands under "Pact" |
+| `[stop] ... the mod is now off` | **The mod stopped itself** — restart the game |
 
 **A bug report** needs these three
 

@@ -37,7 +37,7 @@ Write-Host "版: $version"
 # ($LASTEXITCODE は .ps1 の呼び出しでは更新されないので当てにしない。
 #  ソースより新しい DLL が出来ているかで判断する)
 $newest = (Get-ChildItem (Join-Path $root '*.cs') | Sort-Object LastWriteTime -Descending)[0].LastWriteTime
-& (Join-Path $root 'build.ps1') -NoDeploy
+& (Join-Path $root 'build.ps1') -NoDeploy -Release
 
 if (-not (Test-Path $dll)) { throw "DLL がありません: $dll" }
 if ((Get-Item $dll).LastWriteTime -lt $newest) { throw "DLL がソースより古い。ビルドに失敗しています" }
