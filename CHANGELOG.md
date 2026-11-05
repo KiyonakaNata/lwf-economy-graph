@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.5 — 2026-11-05
+
+- Climax income uses Asmodeus's icon and Monopoly income uses Mammon's icon
+- Liquid Solution and Fireball income use the Magic Wand icon
+- Wand Skill expenses use the Magic Wand icon
+- Alraune's commands (Crossbreeding and more) use Alraune's icon
+- Land Swindler's icon shows Mammon's sparkling face
+
 ## 1.0.4 — 2026-11-04
 
 - Trophy, Utter Satisfaction, Mineral Seedling, Vault Seedling and other newer income sources use their icon colours

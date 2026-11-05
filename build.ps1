@@ -64,6 +64,7 @@ $refNames = @(
     'Newtonsoft.Json.dll',
     'Unity.Localization.dll',
     'Unity.Addressables.dll',
+    'Utage.dll',                 # 会話の立ち絵（分割テクスチャ）から顔を組み立てる
     'Unity.ResourceManager.dll',
     'UnityEngine.UI.dll',
     'Unity.TextMeshPro.dll',

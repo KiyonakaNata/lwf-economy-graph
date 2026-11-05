@@ -55,12 +55,14 @@ using BepInEx.Configuration;
 using HarmonyLib;
 using Map.Ownership;
 using Pact.Pacts.LandPacts;
+using Pact.Pacts.WandPacts;
 using GameState;
 using Items;
 using Items.Craft;
 using Map.MapObjects.Mono;
 using Items.Delivery;
 using Items.Tag;
+using Items.ValueCountSettings;
 using R3;
 using BaseSystem;
 using Stats;
@@ -142,7 +144,7 @@ namespace LwfEconomyGraph
     {
         internal const string PluginGuid = "kiyonakanata.lwfeconomygraph";
         internal const string PluginName = "LWF Economy Graph";
-        internal const string PluginVersion = "1.0.4";
+        internal const string PluginVersion = "1.0.5";
 
         private static readonly Color ShadowColor = new Color(0f, 0f, 0f, 0.9f);
 
@@ -165,7 +167,7 @@ namespace LwfEconomyGraph
             "",              // DebuffPenaltyExpense
             "",              // PactCostExpense
             "",              // RerollExpense
-            "",              // WandSkillExpense
+            "",              // WandSkillExpense  杖スキルのコスト＝魔法のワンド（下で当てる）
             "",              // InitialIncome
             "",              // PactEffectIncome
             "",              // TelephoneExpense
@@ -174,7 +176,8 @@ namespace LwfEconomyGraph
             "",              // TaxExpense
             "",              // CostRefund    （返金はレリックの絵が出る）
             "FreeLand",      // 土地購入（本体には無い。土地無料券の絵を借りる）
-            ""               // 地面師（本体には無い。マモンの顔を下で当てる）
+            "",              // 地面師（本体には無い。マモンの顔を下で当てる）
+            ""               // 杖の収入（本体には無い。魔法のワンドの絵が出る）
         };
 
         /// <summary>
@@ -192,7 +195,7 @@ namespace LwfEconomyGraph
             "StatsReasonOther", "Order", "StatsColumnSale", "Relic", "Order", "Repayment",
             "DebuffRelic", "Pact", "StatsReasonOther", "StatsReasonOther", "StatsReasonOther",
             "Pact", "StatsReasonOther", "StatsColumnProduction", "StatsColumnProduction", "Tax",
-            "StatsReasonOther", "", "Pact"
+            "StatsReasonOther", "", "Pact", "StatsReasonOther"
         };
 
         /// <summary>本体に対応する語が無いものの控え。</summary>
@@ -200,7 +203,7 @@ namespace LwfEconomyGraph
         {
             "Other", "Order", "Sell Off", "Relic", "Order", "Repayment", "Penalty", "Pact",
             "Reroll", "Wand", "Initial", "Pact", "Phone", "Production", "Production", "Tax",
-            "Refund", "Land Purchases", "Land Swindler"
+            "Refund", "Land Purchases", "Land Swindler", "Wand"
         };
 
         // ------------------------------------------------------------------
@@ -283,6 +286,23 @@ namespace LwfEconomyGraph
 
         /// <summary>地面師の効果の中にいるか。ExecuteEffect は待たずに同じ呼び出しの中で現金を足す</summary>
         private static bool InLandCrime;
+
+        /// <summary>
+        /// 本体に無い理由。杖の契約（溶解液・ファイアーボール）の報酬は、壊す演出を待ってから
+        /// 理由も出所も付けずに足される（HarvestableConverter → AddRecord）ので「その他」に混ざる。
+        /// 待った後なので、効果の入口を挟む作りでは旗が間に合わない。
+        /// 報酬に渡す TagCount は HarvestableConverter が1つずつ持ち回している実体なので、
+        /// AddRecordCore に渡ってきた実体で見分け、そのとき持っている杖の契約 ID を出所にする。
+        /// </summary>
+        private const int WandIncomeReason = 19;
+
+        /// <summary>いま記録している報酬が杖の契約のものなら、その契約 ID</summary>
+        private static string InWandReward;
+
+        /// <summary>杖の報酬に使われる TagCount の実体と、杖を持っている実行係（CommitSkillState のたびに掴み直す）</summary>
+        private static TagCount WandRewardA, WandRewardB;
+        private static WandSkillExecutor WandExecutor;
+        private static FieldInfo WandConverterField, WandSourceField, ConverterRewardField, ConverterResourceField;
 
         private Harmony _harmony;
         private bool _patched;
@@ -505,13 +525,17 @@ namespace LwfEconomyGraph
             NewRecorders.Clear();
             InLandPurchase = false;
             InLandCrime = false;
+            InWandReward = null;
+            WandRewardA = null;
+            WandRewardB = null;
+            WandExecutor = null;
         }
 
         // ------------------------------------------------------------------
         // 読み直しをまたぐ記録の持ち越し（開発用）
         // ------------------------------------------------------------------
-        private const string StateKey = "lwf.economygraph.store.v3";
-        private const int StoreVersion = 3;
+        private const string StateKey = "lwf.economygraph.store.v4";
+        private const int StoreVersion = 4;
         private const int StoreSlots = 14;
 
         // 目盛りの置き場所（_scalars の添字）
@@ -681,6 +705,7 @@ namespace LwfEconomyGraph
                     // 土地購入・地面師はこちらで足した理由番号なので、旗ではなくログの値をそのまま使う
                     InLandPurchase = false;
                     InLandCrime = false;
+                    InWandReward = null;
                     OnTagRecorded(new TagRecordedEvent(_storeTagIDs[tag], Math.Abs(_evDelta[i]), _evBalance[i],
                         _evDelta[i] > 0, (StatsCashReason)_evReason[i], sourceID));
                 }
@@ -756,6 +781,44 @@ namespace LwfEconomyGraph
 
             PatchLandPurchase();
             PatchLandCrime();
+            PatchWandReward();
+        }
+
+        /// <summary>
+        /// 杖の報酬を見分ける。杖を持ち替えるたび（CommitSkillState）に報酬用の TagCount を掴み、
+        /// AddRecordCore にその実体が渡ってきた間だけ契約 ID を立てる。
+        /// AddRecord は1行で AddRecordCore を呼ぶだけなので、インライン化されないよう中身の側を挟む。
+        /// 外れても杖の報酬が「その他」に混ざるだけなので、警告だけ出して続ける。
+        /// </summary>
+        private void PatchWandReward()
+        {
+            try
+            {
+                BindingFlags inst = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+                WandConverterField = typeof(WandSkillExecutor).GetField("_harvestableConverter", inst);
+                WandSourceField = typeof(WandSkillExecutor).GetField("_activePresentationSource", inst);
+                ConverterRewardField = typeof(HarvestableConverter).GetField("_rewardTag", inst);
+                ConverterResourceField = typeof(HarvestableConverter).GetField("_resourceTag", inst);
+                MethodInfo commit = typeof(WandSkillExecutor).GetMethod("CommitSkillState", inst);
+                MethodInfo core = typeof(ResourceTagsRecorder).GetMethod("AddRecordCore", inst);
+                if (WandConverterField == null || WandSourceField == null || ConverterRewardField == null
+                    || ConverterResourceField == null || commit == null || core == null)
+                {
+                    Logger.LogWarning("[hook] wand rewards not found; wand income stays under Other");
+                    return;
+                }
+
+                if (_harmony == null) { _harmony = new Harmony(PluginGuid); }
+                _harmony.Patch(commit, postfix: new HarmonyMethod(typeof(EconomyGraphPlugin).GetMethod("WandCommitted",
+                    BindingFlags.Static | BindingFlags.NonPublic)));
+                _harmony.Patch(core,
+                    prefix: new HarmonyMethod(typeof(EconomyGraphPlugin).GetMethod("RecordCoreBegin", BindingFlags.Static | BindingFlags.NonPublic)),
+                    finalizer: new HarmonyMethod(typeof(EconomyGraphPlugin).GetMethod("RecordCoreEnd", BindingFlags.Static | BindingFlags.NonPublic)));
+            }
+            catch (Exception e)
+            {
+                Logger.LogWarning("[hook] cannot patch wand rewards; wand income stays under Other: " + e.Message);
+            }
         }
 
         /// <summary>
@@ -844,6 +907,36 @@ namespace LwfEconomyGraph
         private static void LandCrimeEnd()
         {
             InLandCrime = false;
+        }
+
+        private static void WandCommitted(WandSkillExecutor __instance)
+        {
+            try
+            {
+                object converter = WandConverterField.GetValue(__instance);
+                WandExecutor = __instance;
+                WandRewardA = converter != null ? ConverterRewardField.GetValue(converter) as TagCount : null;
+                WandRewardB = converter != null ? ConverterResourceField.GetValue(converter) as TagCount : null;
+            }
+            catch (Exception) { WandRewardA = null; WandRewardB = null; }
+        }
+
+        /// <summary>記録のたびに呼ばれるので、実体の比較だけで抜ける</summary>
+        private static void RecordCoreBegin(TagCount tagCount)
+        {
+            if (tagCount == null || WandExecutor == null) { return; }
+            if (!ReferenceEquals(tagCount, WandRewardA) && !ReferenceEquals(tagCount, WandRewardB)) { return; }
+            try
+            {
+                WandSkillPresentationSource source = WandSourceField.GetValue(WandExecutor) as WandSkillPresentationSource;
+                InWandReward = source != null ? source.PactID : null;
+            }
+            catch (Exception) { InWandReward = null; }
+        }
+
+        private static void RecordCoreEnd()
+        {
+            InWandReward = null;
         }
 
         // ------------------------------------------------------------------
@@ -1081,6 +1174,7 @@ namespace LwfEconomyGraph
             {
                 _loggedFrameFound = true;
                 Logger.LogInfo("[stats] drawing in the balance graph frame");
+                _faceRetry = true;
             }
         }
 
@@ -1439,6 +1533,13 @@ namespace LwfEconomyGraph
             // 収支タブに出る8種だけを見る。スタンプやローラーは本体の統計窓にも出ないので拾わない
             if (ChartRenderer.KnownIndex(ev.tagID) >= ChartRenderer.KnownTagIDs.Length) { return; }
 
+            // 杖の報酬は本体が理由も出所も付けないので、ここで付け直す（生ログにもこの形で残る）
+            if (InWandReward != null && ev.isAdd && ev.statsCashReason == StatsCashReason.Other)
+            {
+                ev = new TagRecordedEvent(ev.tagID, ev.delta, ev.newTotal, ev.isAdd,
+                    (StatsCashReason)WandIncomeReason, InWandReward, ev.saleItemCountDelta);
+            }
+
             int reason = (int)ev.statsCashReason;
             if (reason < 0 || reason >= ChartRenderer.ReasonCount) { reason = 0; }
 
@@ -1552,7 +1653,9 @@ namespace LwfEconomyGraph
                 || r == StatsCashReason.DebuffPenaltyExpense
                 || r == StatsCashReason.CraftIncome
                 || r == StatsCashReason.CraftExpense
-                || r == StatsCashReason.CostRefund;
+                || r == StatsCashReason.CostRefund
+                || r == StatsCashReason.PactEffectIncome
+                || reason == WandIncomeReason;
         }
 
         private static void AddSource(Dictionary<string, long> dict, string sourceID, int delta)
@@ -1790,9 +1893,26 @@ namespace LwfEconomyGraph
             OnTagRecorded(new TagRecordedEvent("Cash", amount, 0, true, StatsCashReason.BuffRelicIncome, "OnOpenSafeCash"));   // トロフィー
             OnTagRecorded(new TagRecordedEvent("Cash", amount, 0, true, StatsCashReason.CraftIncome, "ChainExplosion"));       // 大満足
             OnTagRecorded(new TagRecordedEvent("Cash", amount, 0, true, StatsCashReason.CraftIncome, "HarvestableSale"));      // 採掘ポイントの売却
+            // 交配（アルラウネに印）。支出は台帳を新しい収入から減らすので、苗の返金より先に流す
+            OnTagRecorded(new TagRecordedEvent("Fertilizer", amount, 0, false, StatsCashReason.CraftExpense, "ClonePlant"));
+            OnTagRecorded(new TagRecordedEvent("Fertilizer", amount, 0, false, StatsCashReason.CraftExpense, "CloneRock"));
+            OnTagRecorded(new TagRecordedEvent("Fertilizer", amount, 0, false, StatsCashReason.CraftExpense, "CloneSafe"));
+
             // 苗の返金は交配で払った肥料が戻るもの。現金には出ない
             OnTagRecorded(new TagRecordedEvent("Fertilizer", amount, 0, true, StatsCashReason.CostRefund, "OnCloneRefundRock"));   // 鉱物の苗
             OnTagRecorded(new TagRecordedEvent("Fertilizer", amount, 0, true, StatsCashReason.CostRefund, "OnCloneRefundSafe"));   // 金庫の苗
+
+            OnTagRecorded(new TagRecordedEvent("Cash", amount, 0, true, StatsCashReason.PactEffectIncome, "SellAllHarvestablePact"));   // 絶頂
+            OnTagRecorded(new TagRecordedEvent("Luxury", amount, 0, true, StatsCashReason.PactEffectIncome, "SetAllPriceTag4"));       // 独占
+
+            // 杖も本物と同じく旗を立てて流す
+            InWandReward = "WandDestroyGetChemical";
+            try { OnTagRecorded(new TagRecordedEvent("Chemical", amount, 0, true)); }
+            finally { InWandReward = null; }
+            InWandReward = "WandDestroyGetFuel";
+            try { OnTagRecorded(new TagRecordedEvent("Fuel", amount, 0, true)); }
+            finally { InWandReward = null; }
+            OnTagRecorded(new TagRecordedEvent("Magic", amount, 0, false, StatsCashReason.WandSkillExpense));   // 杖スキルのコスト
 
             // 地面師は本物と同じく旗を立てて流す（付け直しの経路ごと確かめる）
             InLandCrime = true;
@@ -1959,6 +2079,7 @@ namespace LwfEconomyGraph
         {
             if (reason == LandReason) { return "LandPurchase"; }
             if (reason == LandCrimeReason) { return "LandSwindler"; }
+            if (reason == WandIncomeReason) { return "WandIncome"; }
             if (reason < 0 || reason >= ChartRenderer.ReasonCount) { return "Unknown"; }
             return ((StatsCashReason)reason).ToString();
         }
@@ -2380,6 +2501,13 @@ namespace LwfEconomyGraph
             int faceIndex = FaceIndex(reason);
             if (faceIndex >= 0 && _faces[faceIndex] != null) { return _faces[faceIndex]; }
 
+            // 杖スキルのコストは魔法のワンド（杖の収入と同じ絵）。ワンドはタグではなくアイテムなので出所の引き方で引く
+            if (reason == (int)StatsCashReason.WandSkillExpense)
+            {
+                Sprite wand = GetSourceSprite("Wand", tagID);
+                if (wand != null) { return wand; }
+            }
+
             string tag = ReasonIconTag[reason];
             if (string.IsNullOrEmpty(tag)) { return GetTagSprite(tagID); }
 
@@ -2426,15 +2554,18 @@ namespace LwfEconomyGraph
         private int _craftIconTries;
 
         /// <summary>
-        /// 顔を当てる理由と、その後援者（並びを揃える）。納品はゲヘナ、地面師はマモン。
+        /// 顔を当てる項目と、その後援者（並びを揃える）。
+        /// 理由で引くもの：返済＝ゲヘナ、地面師＝マモン。
+        /// 出所の ID で引くもの（契約の効果）：独占＝マモン、絶頂＝アスモデウス。
         /// </summary>
-        private static readonly Patron[] FacePatrons = new Patron[] { Patron.Gehenna, Patron.Mammon };
-        private static readonly int[] FaceReasons = new int[] { (int)StatsCashReason.RepaymentExpense, LandCrimeReason };
+        private static readonly Patron[] FacePatrons = new Patron[] { Patron.Gehenna, Patron.Mammon, Patron.Mammon, Patron.Asmodeus };
+        private static readonly int[] FaceReasons = new int[] { (int)StatsCashReason.RepaymentExpense, LandCrimeReason, -1, -1 };
+        private static readonly string[] FaceSources = new string[] { null, null, "SetAllPriceTag4", "SellAllHarvestablePact" };
 
         /// <summary>
-        /// 顔の表情。マモンはキラキラ、ゲヘナは笑顔（Discord の絵文字のように顔だけを切って出す）。
+        /// 顔の表情。ゲヘナは笑顔、地面師のマモンはキラキラ、独占のマモンは普通の顔（Discord の絵文字のように顔だけを切って出す）。
         ///
-        /// どちらもアドレスが無い（Addressables のキーに無い）ので、読み込み済みの絵を名前で探す。
+        /// どれもアドレスが無い（Addressables のキーに無い）ので、読み込み済みの絵を名前で探す。
         /// マモンのキラキラは顔シートのコマで、事務所用（150px）を先に、ゲーム内用（100px）を次に見る。
         /// ゲヘナの笑顔の立ち絵は InGame の場面が直接持っている。
         /// 見つからなければ本体の顔アイコン（通常の表情）に落ちる。構図はどれもほぼ同じ。
@@ -2442,21 +2573,251 @@ namespace LwfEconomyGraph
         private static readonly string[][] FaceSpriteNames = new string[][]
         {
             new string[] { "portrait_patron_gehenna_smile" },
-            new string[] { "pic_patron_Mammon_shiny", "pic_patron_Mammon_shiny_0" }
+            new string[] { "pic_patron_Mammon_shiny", "pic_patron_Mammon_shiny_0" },
+            new string[] { "pic_patron_Mammon_normal" },
+            new string[0]
+        };
+
+        /// <summary>
+        /// 会話の立ち絵（Utage の分割テクスチャ）から組み立てる表情。顔シートにも立ち絵にも無い表情はここにしか無い。
+        /// アスモデウスのオホ顔（pic_patron_Asmodeus_oho）。素材は Resources にあるのでいつでも読める。
+        /// </summary>
+        private static readonly string[] FaceDicing = new string[] { null, null, null, "pic_patron_Asmodeus_oho" };
+
+        /// <summary>分割テクスチャから切る枠（立ち絵 3401x4096 に対する割合・左上原点）。顔が枠いっぱいになる寄り</summary>
+        private static readonly Rect[] FaceDicingCrops = new Rect[]
+        {
+            new Rect(), new Rect(), new Rect(),
+            new Rect(0.4366f, 0.2490f, 0.1411f, 0.1172f)
         };
 
         /// <summary>
         /// 顔の絵から顔だけを切る枠（絵に対する割合・左上原点で x, y, 幅, 高さ）。
         /// 元は胸元や小物まで入った上半身で、アイコンの大きさに縮めると表情が潰れる。
-        /// 枠は Discord の絵文字（:lwf_mammon_kirakira: / :lwf_gehenna_smile:）に重ねて合わせた
+        /// 枠は Discord の絵文字（:lwf_mammon_kirakira: / :lwf_gehenna_smile:）に重ねて合わせた。
+        /// アスモデウスは分割テクスチャが読めなかったときの立ち絵（portrait_patron_asmodeus）用
         /// </summary>
         private static readonly Rect[] FaceCrops = new Rect[]
         {
             new Rect(0.39f, 0.27f, 0.49f, 0.49f),   // ゲヘナ
-            new Rect(0.47f, 0.25f, 0.46f, 0.46f)    // マモン
+            new Rect(0.47f, 0.25f, 0.46f, 0.46f),   // マモン（地面師）
+            new Rect(0.47f, 0.25f, 0.46f, 0.46f),   // マモン（独占）
+            new Rect(0.22f, 0.20f, 0.50f, 0.50f)    // アスモデウス
         };
 
+        /// <summary>
+        /// 杖の契約の収入は魔法のワンド（アイテム Wand）の絵で出す。
+        /// 契約カードの絵は背景ごと描かれていて、切り出すと他のアイコンから浮いた。
+        /// 溶解液は薬品だけ、ファイアーボールは燃料だけを出すので、同じ絵でも同じグラフに並ばない
+        /// </summary>
+        private static readonly Dictionary<string, string> SourceIconAlias = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            { "WandDestroyGetChemical", "Wand" },
+            { "WandDestroyGetFuel", "Wand" }
+        };
+
+        /// <summary>
+        /// アルラウネへの命令（交配・売却）は、アルラウネ（召喚アイテム Summon-Farmer の絵）の左下に白縁付きの対象の印を重ねて出す。
+        /// 本体の命令の絵（五角形が増える・×が付く）は小さいと何の命令か分からない。
+        /// 交配の3つは同じ肥料の支出に並ぶので、印（木・岩・金庫）で見分ける。
+        /// 印の絵は HarvestableDB が起動時に読み込む採掘ポイントのアイコン（読み込み済みの絵から名前で探す）。
+        /// 売却の印は現金のタグ
+        /// </summary>
+        private static readonly string[] BadgeSources = new string[] { "ClonePlant", "CloneRock", "CloneSafe", "HarvestableSale" };
+        private static readonly string[] BadgeSprites = new string[] { "icon_harvestables_Tree", "icon_harvestables_IronRock", "icon_harvestables_Safe", null };
+        private static readonly string[] BadgeTags = new string[] { null, null, null, "Cash" };
+        private const string BadgeBaseItem = "Summon-Farmer";
+        private const float BadgeScale = 0.6f;
+        private const int BadgeIconSize = 96;
+        private readonly Sprite[] _badged = new Sprite[BadgeSources.Length];
+        private float _nextBadgeProbe;
+
+        private static int BadgeIndexBySource(string sourceKey)
+        {
+            if (string.IsNullOrEmpty(sourceKey)) { return -1; }
+            for (int i = 0; i < BadgeSources.Length; i++)
+            {
+                if (string.Equals(BadgeSources[i], sourceKey, StringComparison.Ordinal)) { return i; }
+            }
+            return -1;
+        }
+
+        /// <summary>印付きの絵を作る。顔と同じく Update から間を空けて呼ぶ（読み込み済みの絵の全走査があるため）</summary>
+        private void ResolveBadges(Sprite[] loaded)
+        {
+            Sprite baseSp = null;
+            for (int i = 0; i < _badged.Length; i++)
+            {
+                if (_badged[i] != null) { continue; }
+                if (baseSp == null)
+                {
+                    try { baseSp = ItemParamGetter.GetSprite(BadgeBaseItem); }
+                    catch (Exception) { baseSp = null; }
+                    if (baseSp == null) { return; }
+                }
+
+                Sprite badge = null;
+                if (BadgeTags[i] != null) { badge = GetTagSprite(BadgeTags[i]); }
+                else
+                {
+                    if (loaded == null)
+                    {
+                        try { loaded = Resources.FindObjectsOfTypeAll<Sprite>(); }
+                        catch (Exception) { loaded = new Sprite[0]; }
+                    }
+                    badge = FindSprite(loaded, new string[] { BadgeSprites[i] });
+                }
+                if (badge == null) { continue; }
+
+                _badged[i] = ComposeBadge(baseSp, badge, BadgeScale, BadgeIconSize);
+                if (_badged[i] != null) { Logger.LogInfo("[badge] " + BadgeSources[i]); }
+            }
+        }
+
+        /// <summary>
+        /// 絵を RenderTexture に重ねて描き、読み戻して1枚の絵にする。失敗したら null。
+        /// 印は左下（右下だと顔に被る）。印には白縁を付ける：印だけを描いて読み戻し、
+        /// その形を BadgeOutline px 太らせた範囲を白で塗ってから印を載せる
+        /// </summary>
+        private Sprite ComposeBadge(Sprite baseSp, Sprite badge, float scale, int size)
+        {
+            RenderTexture prev = RenderTexture.active;
+            RenderTexture rt = null;
+            try
+            {
+                rt = RenderTexture.GetTemporary(size, size, 0, RenderTextureFormat.ARGB32);
+                Texture2D tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+                float b = size * scale;
+                Rect badgeRect = new Rect(0f, size - b, b, b);
+
+                Color32[] baseLayer = RenderLayer(rt, tex, new Rect(0f, 0f, size, size), baseSp);
+                Color32[] badgeLayer = RenderLayer(rt, tex, badgeRect, badge);
+
+                // 印の絵は描かれている範囲が絵ごとに違う（金庫は下に余白があって小さい）。
+                // 描かれた範囲を測り、その範囲が左下の b 四方に収まるよう置き直して描き直す
+                Rect fitted = FitDrawnArea(badgeLayer, size, badgeRect, b);
+                if (fitted.width > 0f) { badgeLayer = RenderLayer(rt, tex, fitted, badge); }
+
+                // 印の形を太らせた範囲（白縁）。ReadPixels の並びは左下から行ごと
+                int r = BadgeOutline;
+                Color32[] px = baseLayer;
+                for (int y = 0; y < size; y++)
+                {
+                    for (int x = 0; x < size; x++)
+                    {
+                        byte edge = 0;
+                        for (int dy = -r; dy <= r && edge < 255; dy++)
+                        {
+                            int yy = y + dy;
+                            if (yy < 0 || yy >= size) { continue; }
+                            for (int dx = -r; dx <= r; dx++)
+                            {
+                                int xx = x + dx;
+                                if (xx < 0 || xx >= size || dx * dx + dy * dy > r * r) { continue; }
+                                byte a = badgeLayer[yy * size + xx].a;
+                                if (a > edge) { edge = a; }
+                            }
+                        }
+                        int i = y * size + x;
+                        if (edge > 0) { px[i] = Over(new Color32(255, 255, 255, edge), px[i]); }
+                        px[i] = Over(badgeLayer[i], px[i]);
+                    }
+                }
+                tex.SetPixels32(px);
+                tex.Apply();
+                return Sprite.Create(tex, new Rect(0f, 0f, size, size), new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect);
+            }
+            catch (Exception e)
+            {
+                Logger.LogWarning("[badge] cannot compose: " + e.Message);
+                return null;
+            }
+            finally
+            {
+                RenderTexture.active = prev;
+                if (rt != null) { RenderTexture.ReleaseTemporary(rt); }
+            }
+        }
+
+        private const int BadgeOutline = 3;
+
+        /// <summary>
+        /// 描いた層の不透明な範囲（上が 0 の座標）を、左下の side 四方に下端をそろえて収める矩形を返す。
+        /// 横は真ん中に寄せる。何も描かれていなければ幅 0
+        /// </summary>
+        private static Rect FitDrawnArea(Color32[] layer, int size, Rect drawn, float side)
+        {
+            int minX = size, maxX = -1, minY = size, maxY = -1;
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    if (layer[y * size + x].a <= 40) { continue; }
+                    int yd = size - 1 - y;   // ReadPixels は下から並ぶ
+                    if (x < minX) { minX = x; }
+                    if (x > maxX) { maxX = x; }
+                    if (yd < minY) { minY = yd; }
+                    if (yd > maxY) { maxY = yd; }
+                }
+            }
+            if (maxX < 0) { return new Rect(); }
+
+            float cw = maxX - minX + 1, ch = maxY - minY + 1;
+            float k = side / Mathf.Max(cw, ch);
+            float x0 = -(minX - drawn.x) * k + (side - cw * k) * 0.5f;
+            float y0 = size - (maxY + 1 - drawn.y) * k;
+            return new Rect(x0, y0, drawn.width * k, drawn.height * k);
+        }
+
+        /// <summary>1枚だけ描いて読み戻す</summary>
+        private static Color32[] RenderLayer(RenderTexture rt, Texture2D read, Rect r, Sprite sp)
+        {
+            int size = rt.width;
+            RenderTexture.active = rt;
+            GL.Clear(true, true, new Color(0f, 0f, 0f, 0f));
+            GL.PushMatrix();
+            GL.LoadPixelMatrix(0f, size, size, 0f);
+            DrawSpriteInto(r, sp);
+            GL.PopMatrix();
+            read.ReadPixels(new Rect(0f, 0f, size, size), 0, 0);
+            return read.GetPixels32();
+        }
+
+        /// <summary>上の色を下の色に重ねる（ふつうのアルファ合成）</summary>
+        private static Color32 Over(Color32 top, Color32 under)
+        {
+            float ta = top.a / 255f, ua = under.a / 255f;
+            float oa = ta + ua * (1f - ta);
+            if (oa <= 0f) { return new Color32(0, 0, 0, 0); }
+            return new Color32(
+                (byte)((top.r * ta + under.r * ua * (1f - ta)) / oa),
+                (byte)((top.g * ta + under.g * ua * (1f - ta)) / oa),
+                (byte)((top.b * ta + under.b * ua * (1f - ta)) / oa),
+                (byte)(oa * 255f));
+        }
+
+        /// <summary>RenderTexture に描く用。絵のある範囲（textureRect）だけを、余白込みの論理矩形どおりに置く</summary>
+        private static void DrawSpriteInto(Rect r, Sprite sp)
+        {
+            Texture tex = sp.texture;
+            Rect tr = sp.textureRect;
+            Rect uv = new Rect(tr.x / tex.width, tr.y / tex.height, tr.width / tex.width, tr.height / tex.height);
+            Graphics.DrawTexture(SpriteDest(r, sp), tex, uv, 0, 0, 0, 0);
+        }
+
+        /// <summary>分割テクスチャから組み立てる絵の大きさ（px）。アイコンは大きくても 50px 程度</summary>
+        private const int DicingFaceSize = 128;
+
         private int _faceAttempts;
+
+        /// <summary>代わり（本体の顔アイコン）で決めた顔。本来の絵が読み込まれたら差し替える</summary>
+        private readonly bool[] _faceIsFallback = new bool[FacePatrons.Length];
+
+        /// <summary>
+        /// 統計窓を開いたら立てる。顔シートは場面に入ってから読み込まれるので、
+        /// タイトル画面で決めた代わりの顔を、窓を開いたときに1回だけ探し直す
+        /// </summary>
+        private bool _faceRetry;
 
         /// <summary>
         /// コマの一部を指す絵を作る。Sprite.Create は矩形を指すだけなので画素は読まない
@@ -2475,6 +2836,16 @@ namespace LwfEconomyGraph
                     sp.pixelsPerUnit, 0, SpriteMeshType.FullRect);
             }
             catch (Exception) { return sp; }
+        }
+
+        private static int FaceIndexBySource(string sourceKey)
+        {
+            if (string.IsNullOrEmpty(sourceKey)) { return -1; }
+            for (int i = 0; i < FaceSources.Length; i++)
+            {
+                if (string.Equals(FaceSources[i], sourceKey, StringComparison.Ordinal)) { return i; }
+            }
+            return -1;
         }
 
         private static int FaceIndex(int reason)
@@ -2496,23 +2867,53 @@ namespace LwfEconomyGraph
         /// </summary>
         private void ResolveFaces()
         {
-            bool missing = false;
+            bool missing = false, fallback = false;
             for (int i = 0; i < _faces.Length; i++)
             {
-                if (_faces[i] == null) { missing = true; break; }
+                if (_faces[i] == null) { missing = true; }
+                else if (_faceIsFallback[i]) { fallback = true; }
             }
-            if (!missing) { return; }
-            if (Time.unscaledTime < _nextFaceProbe) { return; }
-            _nextFaceProbe = Time.unscaledTime + 3f;
-            _faceAttempts++;
+            bool retry = _faceRetry && fallback;
+            bool badges = false;
+            for (int i = 0; i < _badged.Length; i++)
+            {
+                if (_badged[i] == null) { badges = true; break; }
+            }
+            if (badges && (_faceRetry || Time.unscaledTime >= _nextBadgeProbe))
+            {
+                _nextBadgeProbe = Time.unscaledTime + 3f;
+                ResolveBadges(null);
+            }
+            _faceRetry = false;
+            if (!missing && !retry) { return; }
+            if (!retry)
+            {
+                if (Time.unscaledTime < _nextFaceProbe) { return; }
+                _nextFaceProbe = Time.unscaledTime + 3f;
+                _faceAttempts++;
+            }
 
             Sprite[] loaded = null;
             for (int i = 0; i < _faces.Length; i++)
             {
-                if (_faces[i] != null) { continue; }
+                if (_faces[i] != null && !_faceIsFallback[i]) { continue; }
+                // 探し直しは本来の絵だけ。代わりの顔はもう持っているので取り直さない
+                bool again = _faces[i] != null;
 
                 string from = null;
                 Sprite sp = null;
+
+                if (FaceDicing[i] != null)
+                {
+                    sp = ComposeDicingFace(FacePatrons[i], FaceDicing[i], FaceDicingCrops[i], DicingFaceSize);
+                    if (sp != null)
+                    {
+                        _faces[i] = sp;
+                        _faceIsFallback[i] = false;
+                        Logger.LogInfo("[face] " + FacePatrons[i] + " from " + FaceDicing[i]);
+                        continue;
+                    }
+                }
 
                 if (FaceSpriteNames[i].Length > 0)
                 {
@@ -2525,19 +2926,22 @@ namespace LwfEconomyGraph
                     if (sp != null) { from = sp.name; }
                 }
 
-                if (sp == null && _faceAttempts >= 5)
+                bool isFallback = false;
+                if (sp == null && !again && _faceAttempts >= 5)
                 {
                     try { sp = Patrons.GetFaceIcon(FacePatrons[i]); }
                     catch (Exception) { sp = null; }
-                    if (sp != null) { from = "Patrons.GetFaceIcon"; }
+                    if (sp != null) { from = "Patrons.GetFaceIcon"; isFallback = true; }
                 }
 
                 if (sp == null) { continue; }
                 _faces[i] = CropFace(sp, FaceCrops[i]);
+                _faceIsFallback[i] = isFallback;
                 Logger.LogInfo("[face] " + FacePatrons[i] + " from " + from);
             }
         }
 
+        /// <summary>切り出した顔か。切り口が枠に接しているので、縁取りを枠の内側に留める</summary>
         private bool IsFace(Sprite sp)
         {
             for (int i = 0; i < _faces.Length; i++)
@@ -2545,6 +2949,105 @@ namespace LwfEconomyGraph
                 if (_faces[i] != null && ReferenceEquals(_faces[i], sp)) { return true; }
             }
             return false;
+        }
+
+        /// <summary>
+        /// Utage の分割テクスチャから、枠の範囲だけを組み立てた絵を作る。
+        ///
+        /// 立ち絵は 58px 四方（cellSize 64 − 余白 3×2）の小片に割られ、同じ小片はアトラスの1か所を共有している。
+        /// cellIndexList が「立ち絵の小片（左下から行ごと）→アトラスの小片の番号」で、アトラスも左下から並ぶ。
+        /// 枠に掛かる小片だけを RenderTexture に描いて読み戻す（読み戻す先は自前の Texture2D なので isReadable は関係ない）。
+        /// 失敗したら null を返して、呼び出し側が立ち絵に落とす。
+        /// </summary>
+        private Sprite ComposeDicingFace(Patron patron, string pattern, Rect crop, int size)
+        {
+            RenderTexture prev = RenderTexture.active;
+            RenderTexture rt = null;
+            try
+            {
+                Utage.DicingTextures dicing = Resources.Load<Utage.DicingTextures>("ingameadventure/texture/character/pic_patron_" + patron);
+                if (dicing == null) { Logger.LogWarning("[face] no dicing texture for " + patron); return null; }
+                Utage.DicingTextureData data = null;
+                List<Utage.DicingTextureData> list = dicing.TextureDataList;
+                for (int i = 0; list != null && i < list.Count; i++)
+                {
+                    if (list[i] != null && string.Equals(list[i].Name, pattern, StringComparison.Ordinal)) { data = list[i]; break; }
+                }
+                Texture2D atlas = null;
+                List<Texture2D> atlases = dicing.AtlasTextures;
+                for (int i = 0; data != null && atlases != null && i < atlases.Count; i++)
+                {
+                    if (atlases[i] != null && string.Equals(atlases[i].name, data.AtlasName, StringComparison.Ordinal)) { atlas = atlases[i]; break; }
+                }
+                if (atlas == null && atlases != null && atlases.Count == 1) { atlas = atlases[0]; }
+                if (data == null || atlas == null)
+                {
+                    Logger.LogWarning("[face] no pattern " + pattern + " (patterns=" + (list != null ? list.Count : -1)
+                        + ", first=" + (list != null && list.Count > 0 && list[0] != null ? list[0].Name : "-")
+                        + ", atlases=" + (atlases != null ? atlases.Count : -1)
+                        + ", atlas0=" + (atlases != null && atlases.Count > 0 && atlases[0] != null ? atlases[0].name : "-")
+                        + ", found=" + (data != null) + ")");
+                    return null;
+                }
+
+                BindingFlags any = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+                List<int> cells = typeof(Utage.DicingTextureData).GetField("cellIndexList", any).GetValue(data) as List<int>;
+                int transparent = (int)typeof(Utage.DicingTextureData).GetField("transparentIndex", any).GetValue(data);
+                if (cells == null) { return null; }
+
+                int cs = dicing.CellSize, pad = dicing.Padding, inner = cs - pad * 2;
+                int width = data.Width, height = data.Height;
+                int cols = (width + inner - 1) / inner, rows = (height + inner - 1) / inner;
+                int perRow = atlas.width / cs;
+                if (inner <= 0 || perRow <= 0 || cells.Count < cols * rows) { return null; }
+
+                // 枠（左下原点・立ち絵の画素）
+                float fx = crop.x * width, fw = crop.width * width;
+                float fh = crop.height * height, fy = (1f - crop.y - crop.height) * height;
+                float kx = size / fw, ky = size / fh;
+
+                rt = RenderTexture.GetTemporary(size, size, 0, RenderTextureFormat.ARGB32);
+                RenderTexture.active = rt;
+                GL.Clear(true, true, new Color(0f, 0f, 0f, 0f));
+                GL.PushMatrix();
+                GL.LoadPixelMatrix(0f, size, size, 0f);   // 上が 0（GUI と同じ向き）
+                for (int r = 0; r < rows; r++)
+                {
+                    float iy = r * inner;
+                    if (iy + inner <= fy || iy >= fy + fh) { continue; }
+                    for (int c = 0; c < cols; c++)
+                    {
+                        float ix = c * inner;
+                        if (ix + inner <= fx || ix >= fx + fw) { continue; }
+                        int cell = cells[r * cols + c];
+                        if (cell == transparent) { continue; }
+
+                        float x0 = Mathf.Max(ix, fx), x1 = Mathf.Min(ix + inner, fx + fw);
+                        float y0 = Mathf.Max(iy, fy), y1 = Mathf.Min(iy + inner, fy + fh);
+                        float ax = (cell % perRow) * cs + pad + (x0 - ix);
+                        float ay = (cell / perRow) * cs + pad + (y0 - iy);
+                        Rect uv = new Rect(ax / atlas.width, ay / atlas.height, (x1 - x0) / atlas.width, (y1 - y0) / atlas.height);
+                        Rect dest = new Rect((x0 - fx) * kx, (fy + fh - y1) * ky, (x1 - x0) * kx, (y1 - y0) * ky);
+                        Graphics.DrawTexture(dest, atlas, uv, 0, 0, 0, 0);
+                    }
+                }
+                GL.PopMatrix();
+
+                Texture2D tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+                tex.ReadPixels(new Rect(0f, 0f, size, size), 0, 0);
+                tex.Apply();
+                return Sprite.Create(tex, new Rect(0f, 0f, size, size), new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect);
+            }
+            catch (Exception e)
+            {
+                Logger.LogWarning("[face] cannot compose " + pattern + ": " + e.Message);
+                return null;
+            }
+            finally
+            {
+                RenderTexture.active = prev;
+                if (rt != null) { RenderTexture.ReleaseTemporary(rt); }
+            }
         }
 
         private static Sprite FindSprite(Sprite[] loaded, string[] names)
@@ -2572,7 +3075,8 @@ namespace LwfEconomyGraph
             if (reason < 0 || reason >= ChartRenderer.ReasonCount) { return string.Empty; }
 
             // 専用の絵があるものは絵だけで分かるので、名前は出さない
-            if (!string.IsNullOrEmpty(ReasonIconTag[reason]) || FaceIndex(reason) >= 0)
+            if (!string.IsNullOrEmpty(ReasonIconTag[reason]) || FaceIndex(reason) >= 0
+                || reason == (int)StatsCashReason.WandSkillExpense)
             {
                 return string.Empty;
             }
@@ -3046,8 +3550,21 @@ namespace LwfEconomyGraph
         /// </summary>
         private Sprite GetSourceSprite(string sourceKey, string tagID)
         {
+            int face = FaceIndexBySource(sourceKey);
+            if (face >= 0 && _faces[face] != null) { return _faces[face]; }
+            int badged = BadgeIndexBySource(sourceKey);
+            if (badged >= 0 && _badged[badged] != null) { return _badged[badged]; }
+
             Sprite cached;
             if (_sourceSprites.TryGetValue(sourceKey, out cached)) { return cached; }
+
+            string alias;
+            if (SourceIconAlias.TryGetValue(sourceKey, out alias))
+            {
+                Sprite aliased = GetSourceSprite(alias, tagID);
+                _sourceSprites[sourceKey] = aliased;
+                return aliased;
+            }
 
             // レシピはタグより先に引く。本体の統計窓もクラフトは作る物の絵を出すし、
             // レシピと同名のタグ（ChainExplosion＝コマンド「連鎖爆発」）があると、

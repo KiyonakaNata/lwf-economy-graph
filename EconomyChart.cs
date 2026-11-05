@@ -349,11 +349,11 @@ namespace LwfEconomyGraph
     internal sealed class ChartRenderer
     {
         /// <summary>
-        /// 本体の StatsCashReason は0〜16。後ろの2つはこちらで足した「土地購入」と「地面師」で、
+        /// 本体の StatsCashReason は0〜16。後ろの3つはこちらで足した「土地購入」「地面師」「杖の収入」で、
         /// 本体は理由を付けずに記録するので「その他」「契約」に混ざってしまう（EconomyGraphMod を見よ）。
         /// 本体が理由を増やしたら、こちらで足した番号はその後ろへずらす。
         /// </summary>
-        internal const int ReasonCount = 19;
+        internal const int ReasonCount = 20;
         internal const int SlotsPerBucket = ReasonCount * 2;
 
         /// <summary>枠の設計値（本体が空けている StatsBalanceGraphFrame の内側）。</summary>

@@ -53,9 +53,9 @@ namespace LwfEconomyGraph
             "ChainExplosion",   // DestructionIncome の絵から
             "Chemical",
             "Cinnabar",
-            "ClonePlant",
-            "CloneRock",
-            "CloneSafe",
+            "ClonePlant",   // 交配 - 植物（木の印）
+            "CloneRock",   // 交配 - 鉱物（岩の印）
+            "CloneSafe",   // 交配 - 金庫（金庫の印）
             "Cobalt",
             "Coin",
             "Compost",
@@ -156,6 +156,8 @@ namespace LwfEconomyGraph
             "Ruby",
             "Safe",
             "Salt",
+            "SellAllHarvestablePact",   // 絶頂（アスモデウスの顔）
+            "SetAllPriceTag4",   // 独占（マモンの顔）
             "SingleDirectionMining",
             "Smelter",   // Summon-Smelter の絵から
             "SmelterSpeedByTime",
@@ -338,6 +340,8 @@ namespace LwfEconomyGraph
             "TradeSummonerRubyTag",   // Ruby の絵から
             "Transporter",   // Summon-Transporter の絵から
             "Wand",
+            "WandDestroyGetChemical",   // 溶解液（魔法のワンド）
+            "WandDestroyGetFuel",   // ファイアーボール（魔法のワンド）
             "Wax",
             "Wood",
             "Worker",   // Summon-Worker の絵から
@@ -359,9 +363,9 @@ namespace LwfEconomyGraph
             0xC76DBAu,
             0x3671C7u,
             0xC73B77u,
-            0xC7A16Du,
-            0xC7A16Du,
-            0xC7A16Du,
+            0xD18D3Eu,
+            0x6DC7A1u,
+            0xB4B4C0u,
             0x2459D0u,
             0xE5B436u,
             0xC7816Du,
@@ -462,6 +466,8 @@ namespace LwfEconomyGraph
             0xDA4C5Cu,
             0xC79613u,
             0xE17C95u,
+            0xC75882u,
+            0xDA78D5u,
             0xC7C1C0u,
             0x6DC1C7u,
             0x7FC765u,
@@ -643,6 +649,8 @@ namespace LwfEconomyGraph
             0xDA4C5Cu,
             0xDA4C5Cu,
             0xBB6EC8u,
+            0xD4AB75u,
+            0xD4AB75u,
             0xD4AB75u,
             0xEEC756u,
             0xD18651u,

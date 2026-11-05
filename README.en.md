@@ -148,6 +148,7 @@ Look at `BepInEx/LogOutput.log` first
 | `[stats] ... not found` | **The graph works** — the toolbar won't stay in sync with the game's window |
 | `[hook] ... land purchases ...` | **The graph works** — land purchases land under "Other" |
 | `[hook] ... Land Swindler ...` | **The graph works** — Land Swindler income lands under "Pact" |
+| `[hook] ... wand rewards ...` | **The graph works** — Liquid Solution and Fireball income land under "Other" |
 | `[stop] ... the mod is now off` | **The mod stopped itself** — restart the game |
 
 **A bug report** needs these three
