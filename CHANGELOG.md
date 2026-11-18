@@ -1,5 +1,23 @@
 # Changelog
 
+## 2.0.0 — 2026-11-18
+
+- Added: Business Log — look back at the records of past runs from the office's Business Log button
+  - List — filter by result, star and sponsor
+  - List — sort, hide runs, hover a run for a summary
+  - Statistics — income, expenses, resources, items and crafts, with the graph
+  - Contract History — the contracts taken, in order
+  - Check Factory — play back the factory layout at each repayment and every 30 seconds
+  - Check Factory — go to the moment a contract was taken or a tax started
+  - Tax Notice — what each tax took, with a breakdown
+  - Map Seed — copy it
+- Changed: Balance per repayment — a source that is large in any one repayment gets its own colour
+- Fixed: The cash icon is missing from the toolbar under the graph until the first cash income
+- Changed: Settings — `EmbedInStatsWindow = false` draws no graph in the Statistics screen
+- Removed: The graph window outside the Statistics screen, and the settings for it
+- Removed: F5 (cycle the view) and F8 (CSV export)
+- Checked on game v0.33.0
+
 ## 1.0.5 — 2026-11-05
 
 - Climax income uses Asmodeus's icon and Monopoly income uses Mammon's icon

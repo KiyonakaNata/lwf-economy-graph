@@ -2,15 +2,72 @@
 
 # LWF Economy Graph
 
-Draws income and expense graphs into the Statistics screen of **Lazy Witch's Factory**
+Look back at past runs of **Lazy Witch's Factory** from the office's `Business Log`. Also draws income and expense graphs into the Statistics screen
 
-![Income breakdown](img/composition.png)
+![Check Factory playback](img/en/log-factory-replay.webp)
 
 **[Download the latest release](https://github.com/KiyonakaNata/lwf-economy-graph/releases/latest)** / **[Thunderstore](https://thunderstore.io/c/lazy-witchs-factory/p/KiyonakaNata/LwfEconomyGraph/)** (one-click install with a mod manager)
 
 ---
 
-## What it shows
+## Business Log
+
+- Opens from `Business Log` in the office
+- A feature of this mod — the game's own `Business Log` is not implemented (as of ver 0.33.0)
+- Set to stop working when the game implements its own
+
+![List of runs](img/en/log-list.png)
+
+| List | Action |
+|---|---|
+| Row | Open that run |
+| × on a row | Hide it (the × checkbox at the top lists hidden runs, + brings one back) |
+| Star on a row | Star it |
+| Star and sponsor faces at the top | Filter |
+| Circular arrow | Clear the filters |
+
+### Statistics
+
+![Statistics](img/en/log-stats.png)
+
+![Balance per repayment](img/en/log-stats-repay.png)
+
+### Contract History
+
+The button at the top left shows or hides the effect text
+
+![Contract History with the effect text](img/en/log-pacts.png)
+
+![Contract History](img/en/log-pacts-compact.png)
+
+### Check Factory
+
+The layout at each repayment and every 30 seconds
+
+![Check Factory](img/en/log-factory.png)
+
+| Input | Action |
+|---|---|
+| A row of the Contract History at the top right | Go to where that contract was taken or that tax started |
+| Mouse wheel | Zoom |
+| Drag, movement keys | Move |
+| Double-click | Zoom to the nearest land |
+| Right double-click | Back to the whole map |
+| ← → | Previous / next snapshot |
+| Esc | Return to the list |
+
+### Tax Notice
+
+![Tax Notice](img/en/log-tax.png)
+
+### What is recorded
+
+- Location: `BepInEx/LwfEconomy/runs/`
+- Only for runs played with this mod installed: the graph, the factory layout, the effect text, the tax breakdown, the map seed
+
+---
+
+## Graphs in the Statistics screen
 
 Four views, switched from the toolbar under the graph
 
@@ -82,7 +139,7 @@ Set the range to `Past 1 Minute` for a rate chart
 **This mod only**
 
 - `BepInEx/plugins/LwfEconomyGraph.dll`
-- To clear its settings and CSVs as well: `BepInEx/config/kiyonakanata.lwfeconomygraph.cfg` and `BepInEx/LwfEconomy/`
+- To clear its settings and run records as well: `BepInEx/config/kiyonakanata.lwfeconomygraph.cfg` and `BepInEx/LwfEconomy/`
 
 **BepInEx along with it** (every other mod stops too)
 
@@ -91,7 +148,7 @@ Set the range to `Past 1 Minute` for a rate chart
 
 ---
 
-## Usage
+## Using the graphs
 
 ![Toolbar](img/toolbar.png)
 
@@ -106,13 +163,6 @@ Set the range to `Past 1 Minute` for a rate chart
 
 The toolbar and the game's own Statistics tabs stay in sync
 
-| Key | Action |
-|---|---|
-| **F5** | Cycle the view |
-| **F8** | Write the record out as CSV (`BepInEx/LwfEconomy/`) |
-
-The record is gone when you quit the game or start the next run
-
 ---
 
 ## Settings
@@ -122,10 +172,11 @@ The record is gone when you quit the game or start the next run
 | Key | Default | Values |
 |---|---|---|
 | `Enabled` | `true` | `false` stops both recording and drawing |
-| `EmbedInStatsWindow` | `true` | `false` draws in a separate panel |
+| `EmbedInStatsWindow` | `true` | `false` draws no graph in the Statistics screen |
 | `StartMode` | `0` | 0 = factory balance / 1 = balance over time / 2 = balance per repayment |
 | `FontName` | empty | Set this only if text renders as □ (e.g. `Yu Gothic UI`) |
 | `IconOutlineWidth` | `0.05` | Width of the white outline on icons (`0` for none) |
+| `[BusinessLog] Enabled` | `true` | `false` turns the Business Log off and keeps no run records |
 
 ---
 
@@ -133,7 +184,7 @@ The record is gone when you quit the game or start the next run
 
 | | |
 |---|---|
-| Lazy Witch's Factory | Tested on **ver 0.31.1** |
+| Lazy Witch's Factory | Tested on **ver 0.33.0** |
 | BepInEx | checked with **5.4.23.5** (any 5.4.x should do) |
 
 If a game update stops it from working, that is the end of this mod's life — remove it
@@ -149,13 +200,16 @@ Look at `BepInEx/LogOutput.log` first
 | `[hook] ... land purchases ...` | **The graph works** — land purchases land under "Other" |
 | `[hook] ... Land Swindler ...` | **The graph works** — Land Swindler income lands under "Pact" |
 | `[hook] ... wand rewards ...` | **The graph works** — Liquid Solution and Fireball income land under "Other" |
+| `[log] ButtonArchives not found` | **The graph works** — the Business Log does not open |
+| `[log] the game's own ButtonArchives is usable ...` | **The graph works** — the Business Log opens the game's own screen |
+| `[map] cannot capture the factory ...` | **The Business Log works** — `Check Factory` is missing |
+| `[tax] cannot record the taxes ...` | **The Business Log works** — the Tax Notice lists tax names only |
 | `[stop] ... the mod is now off` | **The mod stopped itself** — restart the game |
 
-**A bug report** needs these three
+**A bug report** needs these two
 
 - a screenshot
 - `BepInEx/LogOutput.log`
-- the CSV from F8
 
 ---
 

@@ -2,15 +2,72 @@
 
 # LWF Economy Graph
 
-**Lazy Witch's Factory** の統計画面に、収支のグラフを描き足す MOD
+**Lazy Witch's Factory** の過去の業務記録を、執務室の「業務日誌」から見返せるようにする MOD。統計画面には収支のグラフを描き足す
 
-![収入の内訳](img/composition.png)
+![工場を確認の再生](img/log-factory-replay.webp)
 
 **[最新版をダウンロード](https://github.com/KiyonakaNata/lwf-economy-graph/releases/latest)** ／ **[Thunderstore](https://thunderstore.io/c/lazy-witchs-factory/p/KiyonakaNata/LwfEconomyGraph/)**（MOD管理ソフトでお手軽導入）
 
 ---
 
-## できること
+## 業務日誌
+
+- 執務室の「業務日誌」から開く
+- MOD 独自の機能（ゲーム本体の「業務日誌」は未実装・ver 0.33.0 時点）
+- ゲーム本体が実装した際は、機能しないようにしている
+
+![業務日誌の一覧](img/log-list.png)
+
+| 一覧 | 動作 |
+|---|---|
+| 行 | そのプレイの記録を開く |
+| 行の × | 隠す（上の × のチェックで再表示、+ で戻す） |
+| 行の星 | 星を付ける |
+| 上の星・スポンサーの顔 | 絞り込む |
+| 回る矢印 | 絞り込みを外す |
+
+### 統計
+
+![統計](img/log-stats.png)
+
+![返済区切りの収支情報](img/log-stats-repay.png)
+
+### 契約履歴
+
+左上のボタンで、効果の文を出す／隠す
+
+![契約履歴（効果の文）](img/log-pacts.png)
+
+![契約履歴](img/log-pacts-compact.png)
+
+### 工場を確認
+
+返済のたびと、30秒ごとの配置
+
+![工場を確認](img/log-factory.png)
+
+| 操作 | 動作 |
+|---|---|
+| 右上の契約履歴の行 | その契約を取った回・課税が発動した回へ移る |
+| ホイール | 拡大・縮小 |
+| ドラッグ・移動キー | 移動 |
+| ダブルクリック | 近くの土地へ寄る |
+| 右ダブルクリック | 全体に戻す |
+| ← → | 前後の回 |
+| Esc | 一覧に戻る |
+
+### 課税通知書
+
+![課税通知書](img/log-tax.png)
+
+### 記録される範囲
+
+- 記録の場所: `BepInEx/LwfEconomy/runs/`
+- この MOD を入れて遊んだプレイにだけ出るもの: グラフ・工場の配置・効果の文・課税の内訳・マップシード
+
+---
+
+## 統計画面のグラフ
 
 グラフの下の帯で4つの表示を切り替える
 
@@ -82,7 +139,7 @@
 **このMODだけ消す**
 
 - `BepInEx/plugins/LwfEconomyGraph.dll`
-- 設定と CSV も消すなら `BepInEx/config/kiyonakanata.lwfeconomygraph.cfg` と `BepInEx/LwfEconomy/`
+- 設定・プレイの記録も消すなら `BepInEx/config/kiyonakanata.lwfeconomygraph.cfg` と `BepInEx/LwfEconomy/`
 
 **BepInEx ごと消す**（他のMODも全部止まる）
 
@@ -91,7 +148,7 @@
 
 ---
 
-## 使いかた
+## 統計画面のグラフの使いかた
 
 ![操作の帯](img/toolbar.png)
 
@@ -106,13 +163,6 @@
 
 帯のボタンと本体の統計タブは連動する
 
-| キー | 動作 |
-|---|---|
-| **F5** | 表示の切替 |
-| **F8** | 記録を CSV に書き出す（`BepInEx/LwfEconomy/`） |
-
-記録はゲームを終了するか、次のランを始めると消える
-
 ---
 
 ## 設定
@@ -122,10 +172,11 @@
 | 項目 | 既定 | 値 |
 |---|---|---|
 | `Enabled` | `true` | `false` で記録も表示も止まる |
-| `EmbedInStatsWindow` | `true` | `false` で別パネルに描く |
+| `EmbedInStatsWindow` | `true` | `false` で統計画面にグラフを描かない |
 | `StartMode` | `0` | 0=工場の収支／1=残高の推移／2=返済区切りの収支情報 |
 | `FontName` | 空 | 文字が □ になるときだけ指定する（例 `Yu Gothic UI`） |
 | `IconOutlineWidth` | `0.05` | アイコンの白縁の太さ（`0` で縁なし） |
+| `[BusinessLog] Enabled` | `true` | `false` で業務日誌を開かず、プレイの記録も残さない |
 
 ---
 
@@ -133,7 +184,7 @@
 
 | | |
 |---|---|
-| Lazy Witch's Factory | **ver 0.31.1** で動作確認 |
+| Lazy Witch's Factory | **ver 0.33.0** で動作確認 |
 | BepInEx | **5.4.23.5** で確認（5.4.x なら動くはず） |
 
 本体の更新で動かなくなったら消すこと
@@ -149,13 +200,16 @@
 | `[hook] ... land purchases ...` | **グラフは表示** — 土地の代金が「その他」に混ざる |
 | `[hook] ... Land Swindler ...` | **グラフは表示** — 地面師の収入が「契約」に混ざる |
 | `[hook] ... wand rewards ...` | **グラフは表示** — 溶解液・ファイアーボールの収入が「その他」に混ざる |
+| `[log] ButtonArchives not found` | **グラフは表示** — 業務日誌が開かない |
+| `[log] the game's own ButtonArchives is usable ...` | **グラフは表示** — 業務日誌はゲーム本体の画面が開く |
+| `[map] cannot capture the factory ...` | **業務日誌は表示** — 「工場を確認」が出ない |
+| `[tax] cannot record the taxes ...` | **業務日誌は表示** — 課税通知書が課税の名前だけになる |
 | `[stop] ... the mod is now off` | **MODが自分で止まった** — ゲームを再起動する |
 
-**不具合の報告**には次の3つを添えること
+**不具合の報告**には次の2つを添えること
 
 - 画面の写真
 - `BepInEx/LogOutput.log`
-- F8 で出力した CSV
 
 ---
 

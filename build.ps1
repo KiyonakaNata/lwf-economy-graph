@@ -30,10 +30,36 @@ $Csc     = 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 $here    = Split-Path -Parent $MyInvocation.MyCommand.Path
 $outDir  = Join-Path $here 'bin'
 $outDll  = Join-Path $outDir 'LwfEconomyGraph.dll'
+# 他の MOD と同じソースを取り込む（写しは作らない）。開発の場所では隣の MOD のフォルダにあり、
+# 公開 repo には隣の MOD が無いので、同じファイルを shared\ に置いてそちらを読む
+function Shared([string]$mod, [string]$name) {
+    $dev = Join-Path $here "..\$mod\$name"
+    if (Test-Path $dev) { return $dev }
+    return (Join-Path $here "shared\$name")
+}
+
 $sources = @(
     (Join-Path $here 'EconomyChart.cs'),      # 描画の中身（ゲームにも BepInEx にも依存しない）
     (Join-Path $here 'EconomyChartColors.cs'),  # アイコンの代表色（自動生成）
-    (Join-Path $here 'EconomyGraphMod.cs')    # プラグイン本体（記録・フック・IMGUI の筆）
+    (Join-Path $here 'EconomyGraphMod.cs'),   # プラグイン本体（記録・フック・IMGUI の筆）
+    (Join-Path $here 'RunLog.cs'),            # 業務日誌：プラグイン本体の続き（グラフの記録の保存と再生・執務室のボタン）
+    (Join-Path $here 'MapLog.cs'),            # 業務日誌：プラグイン本体の続き（工場の配置を返済のたびに控えて残す）
+    (Join-Path $here 'PactLog.cs'),           # 業務日誌：プラグイン本体の続き（取った契約のカードの文を控えて残す）
+    (Join-Path $here 'RecipeLog.cs'),         # 業務日誌：プラグイン本体の続き（Run の終わりのレシピを控えて残す）
+    (Join-Path $here 'RunData.cs'),           # 業務日誌：本体が書いた Run の記録を読む・写しを取る
+    (Join-Path $here 'LogView.cs'),           # 業務日誌：一覧と詳細の画面
+    (Join-Path $here 'LogRunView.cs'),        # 業務日誌：画面の続き（選んだ Run の詳細＝統計・契約履歴・課税通知書）
+    (Join-Path $here 'LogMapView.cs'),        # 業務日誌：画面の続き（工場の配置図）
+    (Join-Path $here 'LogTaxView.cs'),        # 業務日誌：画面の続き（課税で取られた分。Tax Ledger の控えを読む）
+    (Join-Path $here 'LogPactText.cs'),       # 業務日誌：画面の続き（契約のカードの文を、いまの言語で出し直す）
+    (Join-Path $here 'LogListView.cs'),       # 業務日誌：画面の続き（一覧の行・載せた Run のあらまし・行を隠す）
+    (Join-Path $here 'LogFamFigure.cs'),      # 業務日誌：画面の続き（配置図に置く使い魔の絵・向きつき）
+    (Join-Path $here 'TaxRecorder.cs'),       # 業務日誌：課税で取られた分の記録（Tax Ledger が無いときに自分で数える）
+    (Shared 'tax_ledger' 'LedgerHost.cs'),    # ↓ 4つは Tax Ledger と同じソース（写しを作らず取り込む）
+    (Shared 'tax_ledger' 'Ledger.cs'),
+    (Shared 'tax_ledger' 'TaxHooks.cs'),
+    (Shared 'tax_ledger' 'LedgerFile.cs'),
+    (Shared 'eye_drops' 'SpineFigure.cs')   # 使い魔の Spine を GL で描く（Eye Drops と同じソース。写しを作らず取り込む）
 )
 
 foreach ($p in @($Csc, $Managed) + $sources) {
@@ -66,6 +92,8 @@ $refNames = @(
     'Unity.Addressables.dll',
     'Utage.dll',                 # 会話の立ち絵（分割テクスチャ）から顔を組み立てる
     'Unity.ResourceManager.dll',
+    'spine-csharp.dll',
+    'spine-unity.dll',
     'UnityEngine.UI.dll',
     'Unity.TextMeshPro.dll',
     'DOTween.dll',

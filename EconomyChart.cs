@@ -313,6 +313,9 @@ namespace LwfEconomyGraph
         internal bool LastMinute;
         internal bool ExpenseSide;
 
+        /// <summary>内訳を細かく出す（業務日誌で過去の Run を見るとき）。Run の最中と結果画面は false。</summary>
+        internal bool Loose;
+
         // マウスの位置（左上が原点＝IMGUI と同じ向き）。ホバー表示に使う
         internal Vector2 Mouse;
         internal bool MouseValid;
@@ -403,8 +406,7 @@ namespace LwfEconomyGraph
         };
 
         /// <summary>
-        /// 出所の色が引けなかったときの予備。本数の上限も兼ねていて、
-        /// これを超えた出所は「その他」にまとめる。
+        /// 出所の色が引けなかったときの予備（順位で回して使う）。本数の上限は MaxSources。
         /// </summary>
         private static readonly Color[] SourcePalette = new Color[8]
         {
@@ -1671,14 +1673,31 @@ namespace LwfEconomyGraph
             }
             if (grand <= 0) { grand = 1; }
 
-            // 凡例は必ず1行に収める。まず上限まで並べてから、実際の幅を測って
+            // 凡例は2行まで（DrawSourceLegend が折り返す）。まず上限まで並べてから、実際の幅を測って
             // 入りきらないぶんを小さいものから「その他」へ落とす。
             // 見積もりで決め打つと（% の桁が読めないので）余計に削ってしまう。
-            RankSources(all, s.TagID, SourcePalette.Length);
-            while (_rank.Count > 1 && LegendWidth(p, legendIcon, grand) > r.width)
+            // 2行ぶんの幅から1個ぶんを引くのは、行末に半端が余って折り返す分の見込み。
+            // （前は1行・上位8本・3% 以上だった。納品するアイテムの種類が多い Run だと大半が「その他」の灰色に
+            //   なって内訳が読めないので、2026-11-18 に緩めた）
+            // 業務日誌（d.Loose）は、じっくり見る画面なので本数も行数も多めにする
+            int legendRows = d.Loose ? LooseLegendRows : LegendRows;
+            RankSources(all, s.TagID, d);
+            while (_rank.Count > 1
+                && LegendWidth(p, legendIcon, grand) > r.width * legendRows - (legendIcon + 60f) * (legendRows - 1))
             {
-                _rank.RemoveAt(_rank.Count - 1);
-                _rankColors.RemoveAt(_rankColors.Count - 1);
+                // 削るのは、点（全体の割合と、列の中での割合の大きいほう）がいちばん低いもの。
+                // 並びは金額順なので、末尾から削ると「全体では小さいが、序盤の列では大きい」出所が先に消えて、
+                // 列ごとの割合で拾った意味が無くなる
+                int drop = _rank.Count - 1;
+                for (int i = 0; i < _rank.Count; i++)
+                {
+                    float score, lowest;
+                    if (!_rankScore.TryGetValue(_rank[i], out score)) { continue; }
+                    if (!_rankScore.TryGetValue(_rank[drop], out lowest) || score < lowest) { drop = i; }
+                }
+                _rank.RemoveAt(drop);
+                if (drop < _rankColors.Count) { _rankColors.RemoveAt(drop); }
+                if (drop < _rankTotals.Count) { _rankTotals.RemoveAt(drop); }
             }
 
             // 収入も支出も1件も無いことはある（支出タブを開いた直後など）。
@@ -1709,7 +1728,7 @@ namespace LwfEconomyGraph
             float y = r.y + barH + 4f;
 
             // ---- 凡例（アイコンと % だけ）----
-            y = DrawSourceLegend(r.x, y, r.width, line, legendIcon, s.TagID, grand, others, p);
+            y = DrawSourceLegend(r.x, y, r.width, line, legendIcon, s.TagID, grand, others, p, legendRows);
 
             // ---- 返済1回ごとの100%積み上げ ----
             Rect cols = new Rect(r.x, y, r.width, r.yMax - y);
@@ -1746,7 +1765,7 @@ namespace LwfEconomyGraph
         }
 
         private float DrawSourceLegend(float x, float y, float w, float line, float iconSize,
-            string tagID, long grand, long others, IChartPainter p)
+            string tagID, long grand, long others, IChartPainter p, int maxRows = 2)
         {
             float cx = x;
             float cy = y;
@@ -1765,7 +1784,7 @@ namespace LwfEconomyGraph
 
                 if (cx + cellW > x + w)
                 {
-                    if (rows >= 2) { break; }
+                    if (rows >= maxRows) { break; }
                     rows++;
                     cx = x;
                     cy += line + 2f;
@@ -1797,6 +1816,15 @@ namespace LwfEconomyGraph
         private void DrawPeriodColumns(Rect r, ChartData d, List<SourceSeries> all, float iconSize, IChartPainter p)
         {
             int total = Mathf.Max(1, d.PeriodIndex + 1);
+            // 完済した Run は、最後の返済で列を閉じた後に「進行中の列」が1本残る。中身が無ければ出さない
+            // （空の枠が31本目として並び、返済回数と列の数が合わなく見える）
+            bool finished = d.TargetProgress > 0 && d.RepaidTotal >= d.TargetProgress && total > 1;
+            if (finished)
+            {
+                long tail = 0;
+                for (int i = 0; i < all.Count; i++) { tail += Math.Max(0L, all[i].At(total - 1)); }
+                if (tail > 0) { finished = false; } else { total--; }
+            }
 
             float labelH = p.FontSize + 4f;
 
@@ -1821,7 +1849,7 @@ namespace LwfEconomyGraph
 
             float cw = plot.width / total;
             float bw = Mathf.Max(1f, cw - 2f);
-            int current = total - 1;
+            int current = finished ? -1 : total - 1;
 
             // 段の中に描くアイコンの大きさは、このグラフの中では**ひとつに固定**する。
             // 段ごとに変えると不揃いに見えるし、段の大きさに合わせて伸ばすと大味になる。
@@ -2214,20 +2242,41 @@ namespace LwfEconomyGraph
         }
 
         /// <summary>
-        /// 金額の大きい順。上位だけ描いて、残りは「その他」1本にまとめる。
-        /// 全体の MinShare 未満のものも「その他」へ寄せる
-        /// （1% の欄が凡例を1行ぶん余計に食うのを避けるため）。
+        /// 内訳に描く出所を選ぶ。残りは「その他」1本（灰色）にまとめる。
+        ///
+        /// 描くのは、次のどちらかに当てはまる出所:
+        ///   ・Run 全体に占める割合が MinShare 以上
+        ///   ・どれかの列（返済1回ぶん）で、その列に占める割合が ColumnShare 以上
+        /// 2つ目が要るのは、序盤と終盤で納めるアイテムが入れ替わるため。全体の額だけで選ぶと、
+        /// 序盤の出所は終盤の額に埋もれて全部「その他」になり、序盤の列が灰色一色になる（2026-11-18）。
+        ///
+        /// 本数が上限を超えたら、「全体の割合」と「列での最大の割合」の大きいほうが小さい出所から落とす。
+        /// 並び（積む順・凡例の順）は金額の大きい順。
+        ///
+        /// 業務日誌（ChartData.Loose）は、過去の Run をじっくり見る画面なので条件を緩くする。
+        /// Run の最中と結果画面は、ひと目で読めることを優先して絞る。
         /// </summary>
-        private const float MinShare = 0.03f;
+        private const float MinShare = 0.01f;
+        private const float ColumnShare = 0.10f;
+        private const int MaxSources = 16;
+        private const int LegendRows = 2;
+
+        private const float LooseMinShare = 0.005f;
+        private const float LooseColumnShare = 0.04f;
+        private const int LooseMaxSources = 30;
+        private const int LooseLegendRows = 3;
 
         /// <summary>ホバーで出す行数の上限。溢れたぶんは末尾に件数だけ出す。</summary>
         private const int HoverRows = 10;
 
-        private void RankSources(List<SourceSeries> all, string tagID, int maxEntries)
+        private readonly Dictionary<SourceSeries, float> _rankScore = new Dictionary<SourceSeries, float>();
+
+        private void RankSources(List<SourceSeries> all, string tagID, ChartData d)
         {
             _rank.Clear();
             _rankColors.Clear();
             _rankTotals.Clear();
+            _rankScore.Clear();
 
             long grand = 0;
             for (int i = 0; i < all.Count; i++)
@@ -2236,15 +2285,46 @@ namespace LwfEconomyGraph
             }
             if (grand <= 0) { return; }
 
-            long floor = (long)(grand * MinShare);
+            float minShare = d.Loose ? LooseMinShare : MinShare;
+            float columnShare = d.Loose ? LooseColumnShare : ColumnShare;
+            int cap = d.Loose ? LooseMaxSources : MaxSources;
+
+            // 列ごとの合計（列の中身は DrawPeriodColumns と同じ決め：何で返したかが分かる列はそれ、分からなければその期の収入）
+            int periods = Mathf.Max(1, d.PeriodIndex + 1);
+            long[] sums = new long[periods];
+            bool[] byRepaid = new bool[periods];
+            for (int period = 0; period < periods; period++)
+            {
+                byRepaid[period] = ColumnRepaidSum(all, period) > 0;
+                for (int i = 0; i < all.Count; i++)
+                {
+                    long v = Value(all[i], period, byRepaid[period]);
+                    if (v > 0) { sums[period] += v; }
+                }
+            }
+
             for (int i = 0; i < all.Count; i++)
             {
-                if (all[i].Total > 0 && all[i].Total >= floor) { _rank.Add(all[i]); }
+                if (all[i].Total <= 0) { continue; }
+                float overall = (float)((double)all[i].Total / grand);
+                float best = 0f;
+                for (int period = 0; period < periods; period++)
+                {
+                    if (sums[period] <= 0) { continue; }
+                    float share = (float)((double)Value(all[i], period, byRepaid[period]) / sums[period]);
+                    if (share > best) { best = share; }
+                }
+                if (overall < minShare && best < columnShare) { continue; }
+                _rank.Add(all[i]);
+                _rankScore[all[i]] = Mathf.Max(overall, best);
+            }
+
+            if (_rank.Count > cap)
+            {
+                _rank.Sort(delegate (SourceSeries a, SourceSeries b) { return _rankScore[b].CompareTo(_rankScore[a]); });
+                _rank.RemoveRange(cap, _rank.Count - cap);
             }
             _rank.Sort(delegate (SourceSeries a, SourceSeries b) { return b.Total.CompareTo(a.Total); });
-
-            int cap = Mathf.Min(SourcePalette.Length, Mathf.Max(1, maxEntries));
-            while (_rank.Count > cap) { _rank.RemoveAt(_rank.Count - 1); }
 
             for (int i = 0; i < _rank.Count; i++) { _rankTotals.Add(_rank[i].Total); }
             AssignRankColors(tagID);
