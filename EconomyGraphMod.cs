@@ -144,7 +144,7 @@ namespace LwfEconomyGraph
     {
         internal const string PluginGuid = "kiyonakanata.lwfeconomygraph";
         internal const string PluginName = "LWF Economy Graph";
-        internal const string PluginVersion = "2.0.0";
+        internal const string PluginVersion = "2.0.1";
 
         private static readonly Color ShadowColor = new Color(0f, 0f, 0f, 0.9f);
 
@@ -225,8 +225,9 @@ namespace LwfEconomyGraph
         /// <summary>棒1本の秒数（始まりの値。列が MaxBuckets を超えるたびに倍になる）</summary>
         private const float BucketSecondsInitial = 1f;
         private const int MaxBuckets = 1800;
-        /// <summary>CSV 用の生の記録の上限</summary>
-        private const int MaxRawEvents = 300000;
+        /// <summary>生の記録の上限（業務日誌のグラフの保存と、直近1分の速度に使う）。同じ秒の同じ出所はまとめて持つので、
+        /// 30 分のプレイで 2〜3 万件。届くのは、よほど大きな工場だけ</summary>
+        private const int MaxRawEvents = 1000000;
         private const int MaxColumns = 480;
         private const int TextSize = 14;
 
@@ -383,8 +384,6 @@ namespace LwfEconomyGraph
         private float _nextFrameProbe;
         private bool _loggedFrameFound;
 
-        private string _message = string.Empty;
-        private float _messageUntil;
 
         private GUIStyle _text;
         private GUIStyle _title;
@@ -1436,6 +1435,8 @@ namespace LwfEconomyGraph
             _evPeriod.Clear();
             _sourceIDs.Clear();
             _sourceIndex.Clear();
+            _mergeSecond = -1;
+            _mergeIndex.Clear();
             _storeTagIDs.Clear();
             _storeInitial.Clear();
             _storeBalances.Clear();
@@ -1615,11 +1616,34 @@ namespace LwfEconomyGraph
             dict[sourceID] = current + delta;
         }
 
+        // 生の記録をまとめるための控え（いまの秒のぶんだけ）。鍵は「タグ・世代・理由・出所・列・向き」、値は生の記録の位置
+        private int _mergeSecond = -1;
+        private readonly Dictionary<long, int> _mergeIndex = new Dictionary<long, int>();
+        private readonly List<int> _mergeGeneration = new List<int>();   // タグごと。向きが変わるたびに 1 進む
+        private readonly List<int> _mergeSign = new List<int>();         // タグごと。この秒で最後に来た向き（0 はまだ無い）
+
+        /// <summary>
+        /// 生の記録に1件足す。**同じ秒の「同じタグ・同じ向き・同じ理由・同じ出所・同じ列」は、1件にまとめる**
+        /// （2.0.1。それまでは増減1回につき1件で、大きめの工場は 20 分ほどで上限の 30 万件に届き、そこから先が
+        /// 記録されなかった＝業務日誌のグラフが途中で切れ、プレイ中の直近1分の速度も 0 になった。
+        /// 2026-11-19〜20 の 12 プレイのうち 4 つで起きていた。まとめると同じプレイが 2 万件前後になる）。
+        /// 台帳は同じタグの収入と支出の順で結果が変わるので、あいだに逆向きの増減が挟まったら、そこから先は別の件にする
+        /// （タグごとの「世代」を進める）。別のタグとの前後は入れ替わるが、タグどうしは台帳が別なので結果は同じ。
+        /// </summary>
         private void RecordRaw(TagSeries s, TagRecordedEvent ev, double t, int reason, int period)
         {
-            if (_evT.Count >= MaxRawEvents) { _rawEventsTruncated = true; return; }
-
             int tagIndex = s.Index;
+            int second = (int)t;
+            if (second != _mergeSecond)
+            {
+                _mergeSecond = second;
+                _mergeIndex.Clear();
+                for (int i = 0; i < _mergeSign.Count; i++) { _mergeSign[i] = 0; _mergeGeneration[i] = 0; }
+            }
+            while (_mergeSign.Count <= tagIndex) { _mergeSign.Add(0); _mergeGeneration.Add(0); }
+            int sign = ev.isAdd ? 1 : -1;
+            if (_mergeSign[tagIndex] != 0 && _mergeSign[tagIndex] != sign) { _mergeGeneration[tagIndex]++; }
+            _mergeSign[tagIndex] = sign;
             int sourceIdx = -1;
             if (!string.IsNullOrEmpty(ev.statsSourceID))
             {
@@ -1630,6 +1654,19 @@ namespace LwfEconomyGraph
                     _sourceIndex[ev.statsSourceID] = sourceIdx;
                 }
             }
+
+            long key = ((long)(tagIndex & 0xFF) << 54) | ((long)(_mergeGeneration[tagIndex] & 0x3FFF) << 40)
+                | ((long)(reason & 0xFF) << 32) | ((long)((sourceIdx + 1) & 0xFFFFF) << 12)
+                | ((long)(period & 0x7FF) << 1) | (ev.isAdd ? 1L : 0L);
+            int at;
+            if (_mergeIndex.TryGetValue(key, out at) && at < _evT.Count)
+            {
+                _evDelta[at] += ev.isAdd ? ev.delta : -ev.delta;
+                _evBalance[at] = ev.newTotal;
+                return;
+            }
+            if (_evT.Count >= MaxRawEvents) { _rawEventsTruncated = true; return; }
+            _mergeIndex[key] = _evT.Count;
 
             _evT.Add((float)t);
             _evDelta.Add(ev.isAdd ? ev.delta : -ev.delta);
@@ -1837,19 +1874,12 @@ namespace LwfEconomyGraph
             string repayTag = string.Equals(_requiredTag, "Food", StringComparison.Ordinal) ? "Luxury" : "Food";
             OnTagRecorded(new TagRecordedEvent(repayTag, amount, 0, false, StatsCashReason.RepaymentExpense));
 
-            // 統計窓に埋め込んでいるときは Say が見えないので、ログにも残す
             string note = "Injected samples (MOD records only): +" + amount.ToString("N0", CultureInfo.InvariantCulture)
                 + " each, repayment on " + repayTag;
-            Say(note);
             Logger.LogInfo("[dev] " + note);
         }
 #endif
 
-        private void Say(string msg)
-        {
-            _message = msg;
-            _messageUntil = Time.unscaledTime + 6f;
-        }
 
         private void OnGUI()
         {

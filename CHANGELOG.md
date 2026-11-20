@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.1 — 2026-11-20
+
+- Fixed: In a long run, the graph stops recording partway (Business Log statistics, Rate)
+- Fixed: Business Log — opened right after launch, the Summoner Witch shows as a face icon
+- Docs: The Thunderstore page shows each screen of the Business Log
+
 ## 2.0.0 — 2026-11-18
 
 - Added: Business Log — look back at the records of past runs from the office's Business Log button

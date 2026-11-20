@@ -54,6 +54,9 @@ namespace LwfEyeDrops
             { FamType.Smelter, "Assets/Prefab/Fams/SmelterPivotPreview.prefab" },
             { FamType.Farmer, "Assets/Prefab/Fams/Previews/AlraunePivotPreview.prefab" },
             { FamType.Transporter, "Assets/Prefab/Fams/RavenPivotPreview.prefab" },
+            // ウィッチは 2026-11-20 に足した。FamMaster は Run の場面でしか作られないので、ゲームを起動して
+            // Run に入る前（執務室）はこの写しだけが頼り。抜けていたウィッチは、業務日誌でちびキャラが出ず顔アイコンに戻っていた
+            { FamType.Summoner, "Assets/Prefab/Fams/Previews/WitchPivotPreview.prefab" },
         };
 
         private static readonly Dictionary<FamType, SkeletonData> Loaded = new Dictionary<FamType, SkeletonData>();

@@ -12,12 +12,28 @@
 
 ![List of runs](https://raw.githubusercontent.com/KiyonakaNata/lwf-economy-graph/main/img/en/log-list.png)
 
-- **Statistics** — the tables and the graph of that run
-- **Contract History** — the contracts you took, in order
-- **Check Factory** — the factory layout over time, with playback
-- **Tax Notice** — what each tax took
+### Statistics
 
 ![Statistics of a past run](https://raw.githubusercontent.com/KiyonakaNata/lwf-economy-graph/main/img/en/log-stats.png)
+
+![Balance per repayment of a past run](https://raw.githubusercontent.com/KiyonakaNata/lwf-economy-graph/main/img/en/log-stats-repay.png)
+
+### Contract History
+
+![Contract History with the effect text](https://raw.githubusercontent.com/KiyonakaNata/lwf-economy-graph/main/img/en/log-pacts.png)
+
+![Contract History](https://raw.githubusercontent.com/KiyonakaNata/lwf-economy-graph/main/img/en/log-pacts-compact.png)
+
+### Check Factory
+
+- The factory layout at each repayment and every 30 seconds, with playback
+- Click a row of the Contract History → go to where that contract was taken or that tax started
+
+![Check Factory](https://raw.githubusercontent.com/KiyonakaNata/lwf-economy-graph/main/img/en/log-factory.png)
+
+### Tax Notice
+
+![Tax Notice](https://raw.githubusercontent.com/KiyonakaNata/lwf-economy-graph/main/img/en/log-tax.png)
 
 ## Graphs in the Statistics screen
 
@@ -34,6 +50,6 @@
 ## Notes
 
 - Run records are kept in `BepInEx/LwfEconomy/runs/`
-- The graph, the factory layout, the tax amounts and the map seed appear only for runs played with this mod installed
+- The graph, the factory layout, the effect text, the tax breakdown and the map seed appear only for runs played with this mod installed
 - If text shows as □, set `FontName` (e.g. `Yu Gothic UI`) in `BepInEx/config/kiyonakanata.lwfeconomygraph.cfg`
 - Controls, settings and troubleshooting: [GitHub](https://github.com/KiyonakaNata/lwf-economy-graph/blob/main/README.en.md)
