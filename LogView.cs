@@ -700,6 +700,14 @@ namespace LwfEconomyGraph
         /// <summary>ゲームモード。特別任務はその任務の名前、通常は「工場開発」。難易度は別に出す。</summary>
         private static string RunName(RunSummary run)
         {
+            if (!string.IsNullOrEmpty(run.CustomMissionName))
+            {
+                // 番号から今の名前を引く（名前を変えた・言語を切り替えたときに過去の分もそろう）。
+                // 自作任務の MOD が無いと本体は "GetTableFailed" を返すので、そのときは控えの名前を出す
+                string now = MissionName(run.Mission);
+                bool found = !string.IsNullOrEmpty(now) && now != run.Mission && now != "GetTableFailed" && now != "Not initialized";
+                return "[MOD] " + (found ? now : run.CustomMissionName);
+            }
             if (run.Mission != null) { return MissionName(run.Mission); }
             return StripRichText(Message("FactoryDevelop"));
         }

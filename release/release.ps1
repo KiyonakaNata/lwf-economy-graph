@@ -140,3 +140,10 @@ foreach ($z in @($zip, $tsZip)) {
     foreach ($entry in $archive.Entries) { Write-Host "  $($entry.FullName)" }
     $archive.Dispose()
 }
+
+# ---- 古い版の zip は old\ へ（dist\ には今の版だけを残す）----
+$oldDir = Join-Path $outDir 'old'
+Get-ChildItem $outDir -Filter '*.zip' | Where-Object { $_.Name -notlike "*-$version.zip" } | ForEach-Object {
+    if (-not (Test-Path $oldDir)) { New-Item -ItemType Directory -Path $oldDir | Out-Null }
+    Move-Item $_.FullName -Destination $oldDir -Force
+}

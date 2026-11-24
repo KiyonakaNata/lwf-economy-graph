@@ -213,6 +213,15 @@
 
 ---
 
+## MOD を作る人へ
+
+自作の任務を足す MOD の任務を、業務日誌に `[MOD] 任務名` で出す方法
+
+- [LWF Lady Gehenna's Exploits - Mission Pack](https://github.com/KiyonakaNata/lwf-mission-pack-gehenna) の `engine/` を使って作る → 何もしなくても出る
+- 自前で作る → 同じ控え（`BepInEx/LwfMissions/runs.tsv`）を書く。書いている実物は [`engine/MissionPackEngine.cs`](https://github.com/KiyonakaNata/lwf-mission-pack-gehenna/blob/main/engine/MissionPackEngine.cs)（`runs.tsv` で検索・MIT ライセンス）
+
+---
+
 ## 免責
 
 - **非公式のMOD** — 公式のサポート対象外

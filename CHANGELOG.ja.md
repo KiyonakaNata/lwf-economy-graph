@@ -2,6 +2,10 @@
 
 [English](CHANGELOG.md)
 
+## 2.1.0 — 2026-11-24
+
+- 追加: 業務日誌 — 任務を足す MOD（LWF Lady Gehenna's Exploits - Mission Pack）の任務を `[MOD] 任務名` で表示
+
 ## 2.0.1 — 2026-11-20
 
 - 修正: 長いプレイで、グラフの記録が途中で止まる（業務日誌の統計・収支の速度）

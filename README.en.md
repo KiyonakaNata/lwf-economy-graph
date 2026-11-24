@@ -213,6 +213,15 @@ Look at `BepInEx/LogOutput.log` first
 
 ---
 
+## For mod authors
+
+How to show missions from a mod that adds its own missions as `[MOD] mission name` in the Business Log
+
+- Build it on `engine/` from [LWF Lady Gehenna's Exploits - Mission Pack](https://github.com/KiyonakaNata/lwf-mission-pack-gehenna) → nothing else to do
+- Build your own → write the same marker file (`BepInEx/LwfMissions/runs.tsv`). The code that writes it is in [`engine/MissionPackEngine.cs`](https://github.com/KiyonakaNata/lwf-mission-pack-gehenna/blob/main/engine/MissionPackEngine.cs) (search for `runs.tsv`, MIT License)
+
+---
+
 ## Disclaimer
 
 - **Unofficial mod** — not supported by the developer

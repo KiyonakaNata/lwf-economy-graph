@@ -144,7 +144,7 @@ namespace LwfEconomyGraph
     {
         internal const string PluginGuid = "kiyonakanata.lwfeconomygraph";
         internal const string PluginName = "LWF Economy Graph";
-        internal const string PluginVersion = "2.0.1";
+        internal const string PluginVersion = "2.1.0";
 
         private static readonly Color ShadowColor = new Color(0f, 0f, 0f, 0.9f);
 

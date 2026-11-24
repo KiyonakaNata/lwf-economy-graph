@@ -36,6 +36,8 @@ namespace LwfEconomyGraph
         public string GameMode;
         public string Difficulty;
         public string Mission;
+        // 任務パックの MOD（mods/mission_packs）の任務の名前。本体の記録には借り物の任務名で載るので、控えから拾う
+        public string CustomMissionName;
         public string[] Patrons;
         public int RepaymentsDone;
         public int RepaymentsTarget;
@@ -182,6 +184,34 @@ namespace LwfEconomyGraph
             return runs;
         }
 
+        /// <summary>自作の特別任務なら、任務を控えの番号と名前に差し替える。
+        /// 控えは任務パックの MOD（mods/mission_packs）が開始時に書く BepInEx/LwfMissions/runs.tsv（開始時刻 UTC・番号・名前）。
+        /// 本体の記録の開始時刻は控えの少し後になるので、近いもの（5分以内）を当てる。</summary>
+        private static void ApplyCustomMission(RunSummary run)
+        {
+            if (string.IsNullOrEmpty(run.Mission)) { return; }
+            try
+            {
+                string path = Path.Combine(Path.Combine(Paths.BepInExRootPath, "LwfMissions"), "runs.tsv");
+                if (!File.Exists(path)) { return; }
+                double best = 300;
+                foreach (string line in File.ReadAllLines(path))
+                {
+                    string[] cols = line.Split((char)9);
+                    DateTime at;
+                    if (cols.Length < 3 || !DateTime.TryParse(cols[0], CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out at)) { continue; }
+                    double gap = Math.Abs((run.StartedUtc - at.ToUniversalTime()).TotalSeconds);
+                    if (gap < best)
+                    {
+                        best = gap;
+                        run.Mission = cols[1];
+                        run.CustomMissionName = cols[2];
+                    }
+                }
+            }
+            catch (Exception e) { EconomyGraphPlugin.Log.LogWarning("[data] cannot read the custom mission markers: " + e.Message); }
+        }
+
         internal static JObject Read(string path)
         {
             return JObject.Parse(File.ReadAllText(path));
@@ -202,6 +232,7 @@ namespace LwfEconomyGraph
             run.GameMode = Str(json, "gameModeId");
             run.Difficulty = Str(json, "difficultyId");
             run.Mission = Str(json, "specialMissionId");
+            ApplyCustomMission(run);
 
             List<string> patrons = new List<string>();
             foreach (JToken t in List(json, "patronIds")) { patrons.Add((string)t); }

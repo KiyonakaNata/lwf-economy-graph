@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1.0 — 2026-11-24
+
+- Added: Business Log — missions from mission mods (LWF Lady Gehenna's Exploits - Mission Pack) show as `[MOD] mission name`
+
 ## 2.0.1 — 2026-11-20
 
 - Fixed: In a long run, the graph stops recording partway (Business Log statistics, Rate)
